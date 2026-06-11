@@ -1,0 +1,29 @@
+# Python virtual envs and caches
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+env/
+.env
+.pytest_cache/
+
+# Node dependencies and build files
+node_modules/
+dist/
+.svelte-kit/
+.next/
+out/
+build/
+.npm/
+
+# Rust build directories
+target/
+**/*/target/
+Cargo.lock.gsv
+
+# Trade-app specific ignores
+.tradesk/
+credentials.json
+*.png
+*.log
