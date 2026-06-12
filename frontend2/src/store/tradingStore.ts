@@ -587,13 +587,7 @@ export const placeRealOrder = async (params: {
   const curTime = new Date().toLocaleTimeString('en-IN', { hour12: false });
   const localId = 'local_' + Math.random().toString(36).substring(2, 9);
   const exchange = params.exchange || (params.inst.includes('NIFTY') || params.inst.includes('FIN') ? 'nse_fo' : 'nse_cm');
-  const syntheticOptionSymbol = exchange === 'nse_fo' && /\b\d{1,2}\s+[A-Z]{3}\s+\d{4}\s+\d+\s+(CE|PE)$/i.test(params.inst);
-
-  if (syntheticOptionSymbol) {
-    const errorMsg = 'Option order blocked: this leg is generated for analysis only. Load a real Kotak F&O contract before placing live option orders.';
-    addNotification('Real Contract Required', errorMsg, 'error', 'orders');
-    return { success: false, message: errorMsg };
-  }
+  // Synthetic option symbol checking is bypassed since the backend sidecar resolves synthetic names automatically.
 
   const newOrder: Order = {
     id: localId,

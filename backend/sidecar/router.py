@@ -1247,6 +1247,73 @@ def get_option_chain(
         'rows':       rows,
     }
 
+# ── Option Symbol Auto-Resolution ─────────────────────────────────────────────
+def _resolve_real_option_symbol(symbol: str) -> Optional[Dict[str, Any]]:
+    # Symbol format: "NIFTY 25 JUN 2026 24200 CE"
+    m = re.match(r"^([A-Z\s]+)\s+(\d{1,2})\s+([A-Z]{3})\s+(\d{4})\s+(\d+)\s+(CE|PE)$", symbol.strip())
+    if not m:
+        return None
+        
+    underlying = m.group(1).strip().upper()
+    day = int(m.group(2))
+    mon = m.group(3).upper()
+    year = int(m.group(4))
+    strike = int(m.group(5))
+    side = m.group(6).upper()
+    
+    # Map month abbreviation to number
+    months = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC']
+    if mon not in months:
+        return None
+    mon_num = months.index(mon) + 1
+    
+    # Match in INSTRUMENTS
+    for inst in INSTRUMENTS:
+        if inst.get("type") != "Option":
+            continue
+        trd_sym = inst.get("symbol", "")
+        
+        # Match weekly pattern: NIFTY2662524200CE
+        m_weekly = re.match(r"^([A-Z]+)(\d{2})([1-9ONDO])(\d{2})(\d+)(CE|PE)$", trd_sym)
+        if m_weekly:
+            und = m_weekly.group(1)
+            yy = int(m_weekly.group(2))
+            mon_char = m_weekly.group(3)
+            dd = int(m_weekly.group(4))
+            stk = int(m_weekly.group(5))
+            opt_side = m_weekly.group(6)
+            
+            mon_map = {"1":1, "2":2, "3":3, "4":4, "5":5, "6":6, "7":7, "8":8, "9":9, "O":10, "N":11, "D":12}
+            inst_mon = mon_map.get(mon_char)
+            
+            if (und == underlying and 
+                yy == year % 100 and 
+                inst_mon == mon_num and 
+                dd == day and 
+                stk == strike and 
+                opt_side == side):
+                return inst
+
+        # Match monthly pattern: NIFTY26JUN24200CE
+        m_monthly = re.match(r"^([A-Z]+)(\d{2})([A-Z]{3})(\d+)(CE|PE)$", trd_sym)
+        if m_monthly:
+            und = m_monthly.group(1)
+            yy = int(m_monthly.group(2))
+            inst_mon = m_monthly.group(3)
+            stk = int(m_monthly.group(4))
+            opt_side = m_monthly.group(5)
+            
+            if inst_mon in months:
+                inst_mon_num = months.index(inst_mon) + 1
+                if (und == underlying and 
+                    yy == year % 100 and 
+                    inst_mon_num == mon_num and 
+                    stk == strike and 
+                    opt_side == side):
+                    return inst
+                    
+    return None
+
 # ── Place Order ───────────────────────────────────────────────────────────────
 @router.post("/order")
 def place_order(req: OrderRequest):
@@ -1254,11 +1321,19 @@ def place_order(req: OrderRequest):
     if not client or _session["status"] != "CONNECTED":
         raise HTTPException(status_code=401, detail="Not authenticated. Login first.")
     try:
-        # Auto-resolve correct exchange segment using the scrip master
+        # Check if the symbol is a synthetic option symbol and try to resolve it
+        real_inst = _resolve_real_option_symbol(req.trading_symbol)
+        trading_symbol = req.trading_symbol
         exchange_segment = req.exchange_segment
-        inst = next((i for i in INSTRUMENTS if i["name"] == req.trading_symbol or i["symbol"] == req.trading_symbol), None)
-        if inst:
-            exchange_segment = _kotak_segment(inst["exchange"])
+        
+        if real_inst:
+            trading_symbol = real_inst["symbol"]
+            exchange_segment = _kotak_segment(real_inst["exchange"])
+        else:
+            inst = next((i for i in INSTRUMENTS if i["name"] == req.trading_symbol or i["symbol"] == req.trading_symbol), None)
+            if inst:
+                exchange_segment = _kotak_segment(inst["exchange"])
+                trading_symbol = inst["symbol"]
 
         response = client.place_order(
             exchange_segment=exchange_segment,
@@ -1267,7 +1342,7 @@ def place_order(req: OrderRequest):
             order_type=req.order_type,
             quantity=str(req.quantity),
             validity=req.validity,
-            trading_symbol=req.trading_symbol,
+            trading_symbol=trading_symbol,
             transaction_type=req.transaction_type,
             trigger_price=str(req.trigger_price),
             amo=req.amo,
@@ -1291,11 +1366,18 @@ def modify_order(req: ModifyOrderRequest):
     if not client or _session["status"] != "CONNECTED":
         raise HTTPException(status_code=401, detail="Not authenticated.")
     try:
-        # Auto-resolve correct exchange segment using the scrip master
+        real_inst = _resolve_real_option_symbol(req.trading_symbol)
+        trading_symbol = req.trading_symbol
         exchange_segment = req.exchange_segment
-        inst = next((i for i in INSTRUMENTS if i["name"] == req.trading_symbol or i["symbol"] == req.trading_symbol), None)
-        if inst:
-            exchange_segment = _kotak_segment(inst["exchange"])
+        
+        if real_inst:
+            trading_symbol = real_inst["symbol"]
+            exchange_segment = _kotak_segment(real_inst["exchange"])
+        else:
+            inst = next((i for i in INSTRUMENTS if i["name"] == req.trading_symbol or i["symbol"] == req.trading_symbol), None)
+            if inst:
+                exchange_segment = _kotak_segment(inst["exchange"])
+                trading_symbol = inst["symbol"]
 
         response = client.modify_order(
             order_id=req.order_id,
@@ -1304,7 +1386,7 @@ def modify_order(req: ModifyOrderRequest):
             trigger_price=str(req.trigger_price),
             validity=req.validity,
             order_type=req.order_type,
-            trading_symbol=req.trading_symbol,
+            trading_symbol=trading_symbol,
             exchange_segment=exchange_segment,
             product=req.product,
             transaction_type=req.transaction_type,
