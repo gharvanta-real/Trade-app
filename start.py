@@ -15,9 +15,16 @@ YELLOW = "\033[93m"
 RED = "\033[91m"
 RESET = "\033[0m"
 
-# Windows support for ANSI colors
+# Windows support for ANSI colors & UTF-8 output
 if os.name == 'nt':
     os.system('color')
+    os.system('chcp 65001 >nul')
+    try:
+        sys.stdout.reconfigure(encoding='utf-8')
+        sys.stderr.reconfigure(encoding='utf-8')
+    except AttributeError:
+        pass
+
 
 def kill_processes_on_ports(ports):
     print(f"{YELLOW}[SYSTEM] Freeing up previous processes on ports: {ports}...{RESET}")
@@ -95,8 +102,9 @@ def main():
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
         text=True,
+        encoding='utf-8',
         bufsize=1,
-        errors='ignore'
+        errors='replace'
     )
     
     print(f"{GREEN}[SYSTEM] Launching Frontend Dev Server (Vite) on port 5173...{RESET}")
@@ -106,8 +114,9 @@ def main():
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
         text=True,
+        encoding='utf-8',
         bufsize=1,
-        errors='ignore'
+        errors='replace'
     )
     
     # 4. Start log streaming threads
