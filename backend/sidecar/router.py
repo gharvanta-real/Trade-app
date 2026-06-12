@@ -7,6 +7,10 @@ Handles: credentials CRUD, login (auto-TOTP), session status, order placement,
 import asyncio
 import logging
 import sys
+import os
+import re
+import requests
+import pandas as pd
 import threading
 import time
 import warnings
@@ -167,6 +171,116 @@ INSTRUMENTS = [
 
 YF_MAP = {inst["name"]: inst["yf_symbol"] for inst in INSTRUMENTS}
 
+def _async_load_scrip_masters(client):
+    global INSTRUMENTS
+    print("[SCRIP] Starting async scrip master loading...")
+    
+    # We will save files in a local "data" directory
+    data_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")
+    os.makedirs(data_dir, exist_ok=True)
+    
+    segments = ["nse_cm", "nse_fo", "mcx_fo"]
+    new_instruments = []
+    
+    # Keep track of tokens we already have in INSTRUMENTS
+    existing_tokens = {str(inst["token"]) for inst in INSTRUMENTS}
+    
+    for segment in segments:
+        try:
+            print(f"[SCRIP] Fetching scrip master URL for {segment}...")
+            url = client.scrip_master(exchange_segment=segment)
+            if not url or not isinstance(url, str):
+                print(f"[SCRIP] Invalid URL for {segment}: {url}")
+                continue
+                
+            print(f"[SCRIP] URL: {url}")
+            # Extract date or identifier from URL to cache it
+            # e.g., prod/2026-06-11/
+            match = re.search(r'/prod/(\d{4}-\d{2}-\d{2})/', url)
+            date_str = match.group(1) if match else "latest"
+            
+            local_filename = f"scrip_{segment}_{date_str}.csv"
+            local_path = os.path.join(data_dir, local_filename)
+            
+            # Download if not exists
+            if not os.path.exists(local_path):
+                print(f"[SCRIP] Downloading {segment} to {local_path}...")
+                resp = requests.get(url)
+                if resp.status_code == 200:
+                    # Write to a temp file first to prevent corruption
+                    tmp_path = local_path + ".tmp"
+                    with open(tmp_path, "wb") as f:
+                        f.write(resp.content)
+                    os.replace(tmp_path, local_path)
+                    print(f"[SCRIP] Downloaded {segment} successfully.")
+                else:
+                    print(f"[SCRIP] Failed to download {segment}, status code: {resp.status_code}")
+                    continue
+            else:
+                print(f"[SCRIP] Loading {segment} from cache: {local_path}")
+                
+            # Read and parse CSV
+            df = pd.read_csv(local_path)
+            print(f"[SCRIP] Parsing {len(df)} rows for {segment}...")
+            
+            for _, row in df.iterrows():
+                token = str(row.get("pSymbol", ""))
+                # Handle nan or float conversions
+                if not token or token == "nan" or token.endswith(".0"):
+                    token = token.split(".")[0] if token else ""
+                if not token or token in existing_tokens:
+                    continue
+                    
+                trd_sym = str(row.get("pTrdSymbol", ""))
+                sym_name = str(row.get("pSymbolName", ""))
+                if not trd_sym or trd_sym == "nan":
+                    continue
+                    
+                lot_size = row.get("lLotSize")
+                try:
+                    lot_size = int(lot_size) if not pd.isna(lot_size) else 1
+                except:
+                    lot_size = 1
+                    
+                if segment == "mcx_fo":
+                    opt_type = str(row.get("pOptionType", ""))
+                    if opt_type in ("CE", "PE") or trd_sym.endswith("CE") or trd_sym.endswith("PE"):
+                        inst_type = "Option"
+                    else:
+                        inst_type = "Future"
+                    exchange = "MCX"
+                elif segment == "nse_fo":
+                    opt_type = str(row.get("pOptionType", ""))
+                    if opt_type in ("CE", "PE") or trd_sym.endswith("CE") or trd_sym.endswith("PE"):
+                        inst_type = "Option"
+                    else:
+                        inst_type = "Future"
+                    exchange = "NSE_FO"
+                else:
+                    inst_type = "Equity"
+                    exchange = "NSE"
+                    
+                inst = {
+                    "name": trd_sym,
+                    "symbol": trd_sym,
+                    "exchange": exchange,
+                    "type": inst_type,
+                    "token": token,
+                    "lot_size": lot_size,
+                    "yf_symbol": sym_name + ".NS"
+                }
+                new_instruments.append(inst)
+                existing_tokens.add(token)
+                
+        except Exception as e:
+            print(f"[SCRIP] Error loading {segment}: {e}")
+            
+    if new_instruments:
+        INSTRUMENTS.extend(new_instruments)
+        print(f"[SCRIP] Successfully loaded {len(new_instruments)} dynamic instruments. Total instruments: {len(INSTRUMENTS)}")
+    else:
+        print("[SCRIP] No new instruments to load.")
+
 # ── Utility helpers ───────────────────────────────────────────────────────────
 def _ensure_connected():
     client = _session.get("client")
@@ -213,6 +327,8 @@ def _kotak_segment(exchange: str) -> str:
         return "nse_fo"
     if exchange in ("BFO", "BSE_FO"):
         return "bse_fo"
+    if exchange in ("MCX", "MCX_FO"):
+        return "mcx_fo"
     return "nse_cm"
 
 def _quote_items(response: Any) -> List[Dict[str, Any]]:
@@ -656,6 +772,9 @@ def login(req: LoginRequest):
         _notify_feed_clients()
         # ─────────────────────────────────────────────────────────────────────
 
+        # ── Load Scrip Masters dynamically in background ─────────────────────
+        threading.Thread(target=_async_load_scrip_masters, args=(client,), daemon=True, name="load-scrip-masters").start()
+
         return {
             "ok":           True,
             "status":       "CONNECTED",
@@ -925,9 +1044,208 @@ def search_instruments(q: str = Query("", min_length=0)):
         return INSTRUMENTS[:20]
     results = [
         inst for inst in INSTRUMENTS
-        if query in inst["name"].upper() or query in inst["symbol"].upper()
+        if query in inst["name"] or query in inst["symbol"]
     ]
+    
+    # Sort: Prioritize prefix matches, then type (Index -> Equity -> Future -> Option), then name
+    type_order = {"Index": 0, "Equity": 1, "Future": 2, "Option": 3}
+    results.sort(key=lambda x: (
+        0 if x["name"].startswith(query) else 1,
+        type_order.get(x["type"], 4),
+        x["name"]
+    ))
+    
     return results[:20]
+
+# ── Option Chain helpers ──────────────────────────────────────────────────────
+import math as _math
+from datetime import datetime as _dt
+
+_MONTH_ABBR = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC']
+
+def _parse_expiry_from_symbol(trd_sym: str):
+    """
+    Try to extract an expiry date from a trading symbol like
+    NIFTY25JUN24000CE  or  BANKNIFTY2461224500PE  or  CRUDEOIL25JUNFUT
+    Returns a (date_obj, display_str) tuple or None.
+    """
+    # Pattern 1: SYMBOL + YY + MON(3) + STRIKE? + CE/PE/FUT
+    m = re.search(r'(\d{2})([A-Z]{3})(\d{2,5})?(CE|PE|FUT)?$', trd_sym)
+    if m:
+        yy, mon = m.group(1), m.group(2)
+        if mon in _MONTH_ABBR:
+            try:
+                year = 2000 + int(yy)
+                mo   = _MONTH_ABBR.index(mon) + 1
+                # Use last Thursday of that month as canonical expiry
+                import calendar
+                _, last_day = calendar.monthrange(year, mo)
+                d = _dt(year, mo, last_day)
+                while d.weekday() != 3:  # 3 = Thursday
+                    d = _dt(year, mo, d.day - 1)
+                return (d, d.strftime('%d %b %Y').upper())
+            except Exception:
+                pass
+    return None
+
+def _get_option_chain_instruments(underlying: str):
+    """
+    Filter INSTRUMENTS for F&O contracts belonging to `underlying`.
+    Returns only Options (CE/PE) grouped by (expiry_str, strike).
+    """
+    und = underlying.strip().upper()
+    results = []
+    for inst in INSTRUMENTS:
+        if inst.get('type') not in ('Option', 'Future'):
+            continue
+        sym = inst.get('symbol', '')
+        # Match if symbol starts with underlying name (e.g. 'NIFTY', 'BANKNIFTY', 'CRUDEOIL')
+        und_clean = und.replace(' ', '').replace('NIFTY50', 'NIFTY')
+        sym_clean = sym.replace(' ', '')
+        if not (sym_clean.upper().startswith(und_clean) or
+                inst.get('name', '').upper().startswith(und_clean)):
+            continue
+        results.append(inst)
+    return results
+
+@router.get("/option-chain/expiries")
+def get_option_expiries(underlying: str = Query(...)):
+    """Return list of available expiry strings for a given underlying."""
+    instruments = _get_option_chain_instruments(underlying)
+    expiry_set = set()
+    for inst in instruments:
+        parsed = _parse_expiry_from_symbol(inst.get('symbol', ''))
+        if parsed:
+            expiry_set.add(parsed[1])
+    if not expiry_set:
+        # If scrip master not loaded yet, return placeholder weekly dates
+        from datetime import timedelta
+        today = _dt.today()
+        # Find next 4 Thursdays
+        exp_list = []
+        d = today
+        while len(exp_list) < 6:
+            if d.weekday() == 3:
+                exp_list.append(d.strftime('%d %b %Y').upper())
+                d += timedelta(days=7)
+            else:
+                d += timedelta(days=1)
+        return exp_list
+    # Sort chronologically
+    def _sort_key(s):
+        try:
+            return _dt.strptime(s, '%d %b %Y')
+        except Exception:
+            return _dt(2099, 1, 1)
+    return sorted(expiry_set, key=_sort_key)
+
+@router.get("/option-chain/chain")
+def get_option_chain(
+    underlying: str = Query(...),
+    expiry: str     = Query(...),
+    spot: float     = Query(0.0),
+):
+    """
+    Return simulated option chain rows for (underlying, expiry).
+    Uses INSTRUMENTS if available, else generates synthetic data.
+    """
+    und = underlying.strip().upper()
+
+    # Determine spot price
+    if spot == 0.0:
+        # Try to find from store quotes
+        inst = next((i for i in INSTRUMENTS if i['name'].upper() == und or i['symbol'].upper() == und), None)
+        spot_price = 0.0
+    else:
+        spot_price = spot
+
+    # Lot size
+    lot = 50
+    for inst in INSTRUMENTS:
+        n = (inst.get('name') or '').upper()
+        if n == und or n.replace(' 50', '') == und:
+            lot = inst.get('lot_size', lot)
+            break
+
+    # Strike step
+    step = 100 if 'BANK' in und or 'MIDCP' in und else 50
+    if 'SENSEX' in und:
+        step = 100
+    if any(x in und for x in ('CRUDE', 'GOLD', 'SILVER', 'COPPER', 'ZINC', 'LEAD', 'NICKEL', 'ALUMINIUM', 'NATURALGAS')):
+        step = 50
+
+    # Get spot from yfinance if not provided
+    if spot_price == 0.0 and YFINANCE_AVAILABLE:
+        yf_map = {
+            'NIFTY': '^NSEI', 'NIFTY 50': '^NSEI', 'BANKNIFTY': '^NSEBANK',
+            'FINNIFTY': 'NIFTY_FIN_SERVICE.NS', 'MIDCPNIFTY': '^CNXMIDCAP',
+            'SENSEX': '^BSESN',
+        }
+        yf_sym = yf_map.get(und, und + '.NS')
+        try:
+            import yfinance as yf
+            t = yf.Ticker(yf_sym)
+            hist = t.history(period='1d', interval='1m')
+            if not hist.empty:
+                spot_price = float(hist['Close'].iloc[-1])
+        except Exception:
+            spot_price = 0.0
+
+    if spot_price == 0.0:
+        # Fallback defaults
+        defaults = {'NIFTY': 23800, 'NIFTY 50': 23800, 'BANKNIFTY': 55000,
+                    'FINNIFTY': 25000, 'MIDCPNIFTY': 12000, 'SENSEX': 80000}
+        spot_price = defaults.get(und, 1000.0)
+
+    # ATM strike
+    atm = round(spot_price / step) * step
+
+    # Generate 21 strikes around ATM
+    strikes = [atm + (i - 10) * step for i in range(21)]
+
+    def synthetic_leg(strike, side, idx):
+        distance  = abs(strike - spot_price)
+        intrinsic = max(spot_price - strike, 0) if side == 'CE' else max(strike - spot_price, 0)
+        time_val  = max(8, 160 - distance * 0.07)
+        skew      = 1.08 if side == 'PE' else 0.96
+        ltp       = round(intrinsic + time_val * skew + (idx % 3) * 1.5, 2)
+        oi_base   = max(50000, 220000 - distance * 5 + (idx % 5) * 8500)
+        iv        = round(12 + distance / spot_price * 85 + (0.7 if side == 'PE' else 0), 1)
+        moneyness = (spot_price - strike) / spot_price
+        delta     = round(min(0.93, max(0.05, 0.5 + moneyness * 8)) if side == 'CE'
+                          else -min(0.93, max(0.05, 0.5 - moneyness * 8)), 2)
+        return {
+            'ltp':    ltp,
+            'bid':    round(ltp - 0.55, 2),
+            'ask':    round(ltp + 0.65, 2),
+            'oi':     round(oi_base),
+            'chgOi':  round(((spot_price - strike) / spot_price * 100 * (-1 if side == 'CE' else 1)) + ((idx % 4) - 1.5) * 1.5, 2),
+            'volume': round(oi_base * (1.4 + (idx % 4) * 0.1)),
+            'iv':     iv,
+            'delta':  delta,
+            'gamma':  round(0.007 + max(0, 1 - distance / 800) * 0.013, 3),
+            'theta':  round(-(ltp * 0.02 + distance * 0.0015), 2),
+            'vega':   round(3.5 + max(0, 1 - distance / 800) * 4.5, 2),
+        }
+
+    rows = []
+    for idx, strike in enumerate(strikes):
+        rows.append({
+            'strike':   strike,
+            'call':     synthetic_leg(strike, 'CE', idx),
+            'put':      synthetic_leg(strike, 'PE', idx),
+            'isAtm':    strike == atm,
+        })
+
+    return {
+        'underlying': und,
+        'expiry':     expiry,
+        'spot':       round(spot_price, 2),
+        'atm':        atm,
+        'lotSize':    lot,
+        'step':       step,
+        'rows':       rows,
+    }
 
 # ── Place Order ───────────────────────────────────────────────────────────────
 @router.post("/order")
@@ -936,8 +1254,14 @@ def place_order(req: OrderRequest):
     if not client or _session["status"] != "CONNECTED":
         raise HTTPException(status_code=401, detail="Not authenticated. Login first.")
     try:
+        # Auto-resolve correct exchange segment using the scrip master
+        exchange_segment = req.exchange_segment
+        inst = next((i for i in INSTRUMENTS if i["name"] == req.trading_symbol or i["symbol"] == req.trading_symbol), None)
+        if inst:
+            exchange_segment = _kotak_segment(inst["exchange"])
+
         response = client.place_order(
-            exchange_segment=req.exchange_segment,
+            exchange_segment=exchange_segment,
             product=req.product,
             price=str(req.price),
             order_type=req.order_type,
@@ -967,6 +1291,12 @@ def modify_order(req: ModifyOrderRequest):
     if not client or _session["status"] != "CONNECTED":
         raise HTTPException(status_code=401, detail="Not authenticated.")
     try:
+        # Auto-resolve correct exchange segment using the scrip master
+        exchange_segment = req.exchange_segment
+        inst = next((i for i in INSTRUMENTS if i["name"] == req.trading_symbol or i["symbol"] == req.trading_symbol), None)
+        if inst:
+            exchange_segment = _kotak_segment(inst["exchange"])
+
         response = client.modify_order(
             order_id=req.order_id,
             quantity=str(req.quantity),
@@ -975,7 +1305,7 @@ def modify_order(req: ModifyOrderRequest):
             validity=req.validity,
             order_type=req.order_type,
             trading_symbol=req.trading_symbol,
-            exchange_segment=req.exchange_segment,
+            exchange_segment=exchange_segment,
             product=req.product,
             transaction_type=req.transaction_type,
         )

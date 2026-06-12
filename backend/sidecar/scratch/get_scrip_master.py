@@ -24,7 +24,7 @@ def main():
     
     print("Fetching scrip master for nse_cm...")
     try:
-        res = client.scrip_master(exchange_segment="nse_cm")
+        res = client.scrip_master(exchange_segment="nse_fo")
         print("Scrip master response type:", type(res))
         if isinstance(res, dict):
             print("Keys:", res.keys())

@@ -1,16 +1,26 @@
 import { createSignal, onMount, createEffect, For, Show } from 'solid-js';
 import type { Component } from 'solid-js';
-import { store, cancelRealOrder, placeRealOrder } from '../../store/tradingStore';
+import { store, cancelRealOrder, placeRealOrder, setSelectedOrderId } from '../../store/tradingStore';
 import type { Order, OrderLog } from '../../store/tradingStore';
 import { ModifyOrderModal } from '../../components/ModifyOrderModal';
 import { OrderModal } from '../../components/OrderModal';
 import './orders.css';
 
+const cleanLogText = (value: string) => value
+  .replace(/[\u0080-\uFFFF]+/g, ' ')
+  .replace(/@ ([0-9])/g, '@ Rs. $1')
+  .replace(/\bat ([0-9])/g, 'at Rs. $1')
+  .replace(/\blimit ([0-9])/g, 'limit Rs. $1')
+  .replace(/\bRequired: ([0-9])/g, 'Required: Rs. $1')
+  .replace(/\bAvailable: ([0-9])/g, 'Available: Rs. $1')
+  .replace(/\s+/g, ' ')
+  .trim();
+
 export const OrdersPage: Component = () => {
   const [selectedTab, setSelectedTab] = createSignal('open');
   const [filterAction, setFilterAction] = createSignal('all');
   const [searchQuery, setSearchQuery] = createSignal('');
-  const [selectedOrderId, setSelectedOrderId] = createSignal<string | null>(null);
+  
   const [showNewOrder, setShowNewOrder] = createSignal(false);
   const [showModify, setShowModify] = createSignal(false);
   const [modifyTarget, setModifyTarget] = createSignal<Order | null>(null);
@@ -89,6 +99,16 @@ export const OrdersPage: Component = () => {
   });
 
   // Derived computations — always use store (real broker data synced every 5s)
+  createEffect(() => {
+    const id = store.selectedOrderId;
+    if (!id) return;
+    const order = store.orders.find(o => o.id === id || o.orderId === id);
+    if (!order) return;
+    if (order.status === 'executed') setSelectedTab('executed');
+    else if (order.status === 'cancelled' || order.status === 'rejected') setSelectedTab('history');
+    else setSelectedTab('open');
+  });
+
   const getOrders = () => store.orders;
 
   const filteredOrders = () => {
@@ -130,7 +150,13 @@ export const OrdersPage: Component = () => {
   };
 
   const getOrderTimeline = (ord: Order): OrderLog[] => {
-    if (ord.logs && ord.logs.length > 0) return ord.logs;
+    if (ord.logs && ord.logs.length > 0) {
+      return ord.logs.map(log => ({
+        ...log,
+        title: cleanLogText(log.title),
+        desc: cleanLogText(log.desc),
+      }));
+    }
 
     const time = ord.time;
     const price = ord.price;
@@ -162,12 +188,10 @@ export const OrdersPage: Component = () => {
 
   // Selected Order details
   const activeOrder = () => {
+    const id = store.selectedOrderId;
+    if (!id) return null;
     const orders = filteredOrders();
-    const id = selectedOrderId();
-    if (id) {
-      return orders.find(o => o.id === id) || orders[0];
-    }
-    return orders[0];
+    return orders.find(o => o.id === id) || null;
   };
 
   // KPI Computations
@@ -246,7 +270,7 @@ export const OrdersPage: Component = () => {
       </div>
 
       {/* Main Area Split */}
-      <div class="orders-split-body">
+      <div class={`orders-split-body ${store.selectedOrderId ? 'show-panel' : 'hide-panel'}`}>
         {/* Left Column (Table + Bottom charts) */}
         <div class="orders-left-col">
           <div class="orders-panel-main">
@@ -443,7 +467,7 @@ export const OrdersPage: Component = () => {
                 <div class="details-header">
                   <div class="details-title-row">
                     <span class="details-inst-name font-bold">{ord().inst}</span>
-                    <button class="close-sidebar-btn">✕</button>
+                    <button class="close-sidebar-btn" onClick={() => setSelectedOrderId(null)}>✕</button>
                   </div>
                   <span class="details-inst-subtitle">NFO Options CE <span class={`side-badge ${ord().side.toLowerCase()}`}>{ord().side.toUpperCase()}</span></span>
                 </div>

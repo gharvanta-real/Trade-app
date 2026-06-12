@@ -9,17 +9,16 @@
 ///   "42[...]" → MESSAGE event (stock feed / connection ack)
 ///
 /// After connection, we must send an auth frame then the subscription.
-
 use serde_json::Value;
 use tracing::{debug, warn};
 
 /// Decoded Engine.IO frame variants we care about.
 #[derive(Debug)]
 pub enum EioFrame {
-    Open(()),           // server hello — contains ping_interval / ping_timeout
-    Ping,               // server keepalive request
-    Message(Vec<Value>),// 42[event, payload] → parsed inner array
-    Unknown(()),        // anything else — log and ignore
+    Open(()),            // server hello — contains ping_interval / ping_timeout
+    Ping,                // server keepalive request
+    Message(Vec<Value>), // 42[event, payload] → parsed inner array
+    Unknown(()),         // anything else — log and ignore
 }
 
 /// Parse a raw text frame received from the Kotak wstreamer WebSocket.
@@ -27,8 +26,11 @@ pub fn parse_frame(raw: &str) -> EioFrame {
     if raw.starts_with('0') {
         let json_part = &raw[1..];
         match serde_json::from_str::<Value>(json_part) {
-            Ok(_)  => EioFrame::Open(()),
-            Err(e) => { warn!("Bad OPEN frame: {e}"); EioFrame::Unknown(()) }
+            Ok(_) => EioFrame::Open(()),
+            Err(e) => {
+                warn!("Bad OPEN frame: {e}");
+                EioFrame::Unknown(())
+            }
         }
     } else if raw == "2" {
         EioFrame::Ping
@@ -36,7 +38,10 @@ pub fn parse_frame(raw: &str) -> EioFrame {
         let json_part = &raw[2..];
         match serde_json::from_str::<Vec<Value>>(json_part) {
             Ok(arr) => EioFrame::Message(arr),
-            Err(e)  => { warn!("Bad 42 frame: {e}"); EioFrame::Unknown(()) }
+            Err(e) => {
+                warn!("Bad 42 frame: {e}");
+                EioFrame::Unknown(())
+            }
         }
     } else {
         debug!("Unhandled EIO frame: {raw}");

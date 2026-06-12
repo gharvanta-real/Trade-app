@@ -19,6 +19,7 @@ export interface MarketSymbol {
   token?: string;
   exchange?: string;
   lotSize?: number;
+  colorLabel?: 'red' | 'blue' | 'green' | 'orange' | 'none';
 }
 
 export interface OrderLog {
@@ -173,7 +174,21 @@ const [store, setStore] = createStore({
     showVolume: true,
     notificationTimeout: 6,
     soundAlerts: true
-  } as UserSettings
+  } as UserSettings,
+  coreConnected: false,
+  coreMode: 'Stopped',
+  coreTicks: 0,
+  coreCandles: 0,
+  coreRealizedPnl: 0,
+  coreUnrealizedPnl: 0,
+  coreTotalPnl: 0,
+  coreKillSwitchActive: false,
+  coreWarnings: [] as any[],
+  coreAuditLogs: [] as any[],
+  corePositions: [] as any[],
+  coreProposals: [] as any[],
+  selectedOrderId: null as string | null,
+  activeChartSymbol: 'NIFTY 50'
 });
 
 // 3. NAVIGATION REGISTRATION
@@ -529,26 +544,63 @@ export const initMarketWebSocket = () => {
   syncBrokerData();
   setInterval(() => syncBrokerData(), MARKET_SYNC_INTERVAL_MS);
   initFeedWebSocket();
+  initCoreWebSocket();
+  initCoreDataSync();
 
-  // Local price simulation when broker not connected
+  // Local price simulation when broker not connected OR live WebSocket feed is inactive/stale
   setInterval(() => {
-    if (store.brokerConnected) return;
-    Object.keys(initialSymbols).forEach(key => {
-      const sym = store.symbols[key];
+    const isFeedStale = Date.now() - lastFeedTick > 3000;
+    if (store.brokerConnected && !isFeedStale) return;
+
+    // Simulate for watchlist, active chart symbol, and initial fallback symbols
+    const activeChart = store.activeChartSymbol;
+    const symbolsToSimulate = Array.from(new Set([
+      ...store.watchlist,
+      ...(activeChart ? [activeChart] : []),
+      ...Object.keys(initialSymbols)
+    ]));
+
+    symbolsToSimulate.forEach(key => {
+      let sym = store.symbols[key];
+      if (!sym) {
+        // Auto-create symbol state if it doesn't exist
+        const isIndex = key.includes('NIFTY') || key.includes('BANK') || key.includes('FIN') || key.includes('SENSEX');
+        const defaultPrice = key.includes('BANK') ? 52000.00 : key.includes('FIN') ? 23800.00 : isIndex ? 24200.00 : 150.00;
+        setStore('symbols', key, {
+          name: key,
+          price: defaultPrice,
+          change: 0,
+          pct: 0,
+          up: true,
+          type: isIndex ? 'Index' : 'Equity'
+        });
+        sym = store.symbols[key];
+      }
+
       if (!sym) return;
-      const changePercent = (Math.random() - 0.49) * 0.0008;
-      const oldPrice = sym.price;
+      let oldPrice = sym.price;
+      if (!oldPrice || oldPrice === 0) {
+        const isIndex = key.includes('NIFTY') || key.includes('BANK') || key.includes('FIN') || key.includes('SENSEX');
+        oldPrice = key.includes('BANK') ? 52000.00 : key.includes('FIN') ? 23800.00 : isIndex ? 24200.00 : 150.00;
+      }
+
+      const isIndex = key.includes('NIFTY') || key.includes('BANK') || key.includes('FIN') || key.includes('SENSEX');
+      const volatility = isIndex ? 0.0003 : 0.001; // Indexes have lower percentage volatility than stocks
+      const changePercent = (Math.random() - 0.495) * volatility;
       const newPrice = Number((oldPrice * (1 + changePercent)).toFixed(2));
-      const diff = newPrice - (sym.prevClose || oldPrice);
-      const pct = ((newPrice - (sym.prevClose || oldPrice)) / (sym.prevClose || oldPrice)) * 100;
+      const prevClose = sym.prevClose || (oldPrice * 0.995);
+      const diff = newPrice - prevClose;
+      const pct = (diff / prevClose) * 100;
+
       setStore('symbols', key, {
         price: newPrice,
         change: Number(diff.toFixed(2)),
         pct: Number(pct.toFixed(2)),
         up: diff >= 0,
       });
+      syncPositionMark(key, newPrice);
     });
-  }, 1500);
+  }, 1000);
 };
 
 // 11. REAL ORDER PLACEMENT
@@ -563,8 +615,8 @@ export const placeRealOrder = async (params: {
   validity?: 'DAY' | 'IOC';
   amo?: boolean;
   exchange?: string;
-}): Promise<{ success: boolean; message: string }> => {
-  // Paper trade mode â€” use local store
+}): Promise<{ success: boolean; message: string; orderId?: string }> => {
+  // Paper trade mode — use local store
   if (store.paperTradeMode) {
     const success = placeOrder({
       inst: params.inst,
@@ -575,7 +627,7 @@ export const placeRealOrder = async (params: {
       trigger: params.trigger || 0,
       prod: params.prod,
     });
-    return { success: !!success, message: success ? 'Paper order placed' : 'Insufficient margin' };
+    return { success: !!success, message: success ? 'Paper order placed' : 'Insufficient margin', orderId: success || undefined };
   }
 
   const curTime = new Date().toLocaleTimeString('en-IN', { hour12: false });
@@ -680,7 +732,7 @@ export const placeRealOrder = async (params: {
 
     addNotification('Order Accepted', `${params.side} ${params.qty} ${params.inst} @ ${params.type === 'Market' ? 'MKT' : 'Rs. ' + params.price}`, 'success', 'orders');
     setTimeout(() => syncBrokerData(true), 700);
-    return { success: true, message: `Kotak accepted order ${realId}` };
+    return { success: true, message: `Kotak accepted order ${realId}`, orderId: realId };
   } catch (e: any) {
     const errorMsg = e.message || 'Network error';
     const nowTime = new Date().toLocaleTimeString('en-IN', { hour12: false });
@@ -814,8 +866,7 @@ export const searchInstruments = async (query: string): Promise<any[]> => {
   return [];
 };
 
-// 17. LOCAL ORDER ACTIONS (paper trade / alert simulation)
-export const placeOrder = (orderParams: Omit<Order, 'id' | 'time' | 'status'>) => {
+export const placeOrder = (orderParams: Omit<Order, 'id' | 'time' | 'status'>): string | null => {
   const id = 'local_' + Math.random().toString(36).substring(2, 9);
   const time = new Date().toLocaleTimeString('en-IN', { hour12: false });
   
@@ -831,12 +882,12 @@ export const placeOrder = (orderParams: Omit<Order, 'id' | 'time' | 'status'>) =
       failReason: 'Insufficient available margin',
       logs: [
         { title: 'Order Initiated', desc: `Requesting ${orderParams.side} ${orderParams.qty} qty (Paper)`, time, status: 'completed' },
-        { title: 'Order Rejected', desc: `Error: Insufficient available margin (Required: â‚¹${totalCost.toFixed(2)}, Available: â‚¹${store.margins.available.toFixed(2)})`, time, status: 'failed' }
+        { title: 'Order Rejected', desc: `Error: Insufficient available margin (Required: ₹${totalCost.toFixed(2)}, Available: ₹${store.margins.available.toFixed(2)})`, time, status: 'failed' }
       ]
     };
     setStore('orders', (o) => [rejectedOrder, ...o]);
     addNotification('Order Rejected', 'Insufficient available margin.', 'error', 'orders');
-    return false;
+    return null;
   }
 
   const newOrder: Order = {
@@ -845,10 +896,10 @@ export const placeOrder = (orderParams: Omit<Order, 'id' | 'time' | 'status'>) =
     time,
     status: orderParams.type === 'Market' ? 'executed' : 'open',
     logs: [
-      { title: 'Order Placed', desc: `Paper order submitted at â‚¹${priceVal}`, time, status: 'completed' },
+      { title: 'Order Placed', desc: `Paper order submitted at ₹${priceVal}`, time, status: 'completed' },
       { 
         title: orderParams.type === 'Market' ? 'Executed' : 'Open', 
-        desc: orderParams.type === 'Market' ? 'Filled instantly at market price' : `Waiting to trigger at limit â‚¹${orderParams.price}`, 
+        desc: orderParams.type === 'Market' ? 'Filled instantly at market price' : `Waiting to trigger at limit ₹${orderParams.price}`, 
         time, 
         status: 'completed' 
       }
@@ -861,7 +912,7 @@ export const placeOrder = (orderParams: Omit<Order, 'id' | 'time' | 'status'>) =
   } else {
     addNotification('Order Placed', `Placed ${newOrder.side} ${newOrder.type} for ${newOrder.qty} ${newOrder.inst}`, 'info', 'orders');
   }
-  return true;
+  return id;
 };
 
 const executeOrder = (orderId: string, fillPrice: number) => {
@@ -970,6 +1021,205 @@ export const runStrategyBacktest = (name: string, _template: string) => {
       addNotification('Backtest Complete!', `"${name}" â€” Win Rate: ${winRate.toFixed(1)}%`, 'success', 'strategy');
     }
   }, 300);
+};
+
+// 21. CORE DATA SYNC & OPERATIONS
+let coreWs: WebSocket | null = null;
+export const initCoreWebSocket = () => {
+  if (coreWs) return;
+  coreWs = new WebSocket('ws://localhost:8002/ws');
+
+  coreWs.onmessage = (event) => {
+    try {
+      const msg = JSON.parse(event.data);
+      if (msg.type === 'tick' && msg.data) {
+        msg.data.forEach((tick: any) => {
+          const ltp = tick.ltp || 0;
+          const token = String(tick.token || '');
+          const sym = Object.keys(store.symbols).find(k => store.symbols[k].token === token);
+          if (sym) {
+            const prev = store.symbols[sym];
+            if (!prev) return;
+            const change = ltp - (prev.prevClose || ltp);
+            const pct = prev.prevClose ? (change / prev.prevClose) * 100 : 0;
+            setStore('symbols', sym, {
+              price: ltp,
+              change: Number(change.toFixed(2)),
+              pct: Number(pct.toFixed(2)),
+              up: change >= 0,
+            });
+            syncPositionMark(sym, ltp);
+          }
+        });
+      }
+    } catch { /* ignore */ }
+  };
+
+  coreWs.onclose = () => {
+    coreWs = null;
+    setTimeout(initCoreWebSocket, 4000);
+  };
+};
+
+export const initCoreDataSync = () => {
+  // Poll /core/status and proposals every 1 second
+  setInterval(async () => {
+    try {
+      const res = await fetch('http://localhost:8002/core/status');
+      if (res.ok) {
+        const data = await res.json();
+        setStore({
+          coreConnected: true,
+          coreMode: data.mode,
+          coreTicks: data.tick_count,
+          coreCandles: data.closed_candles,
+          coreRealizedPnl: data.realized_pnl,
+          coreUnrealizedPnl: data.unrealized_pnl,
+          coreTotalPnl: data.total_pnl,
+          coreKillSwitchActive: data.kill_switch_active,
+          coreWarnings: data.warnings,
+          coreAuditLogs: data.audit_logs,
+          corePositions: data.positions || [],
+        });
+      } else {
+        setStore('coreConnected', false);
+      }
+    } catch {
+      setStore('coreConnected', false);
+    }
+
+    if (store.coreConnected) {
+      try {
+        const res = await fetch('http://localhost:8002/core/proposals');
+        if (res.ok) {
+          const proposals = await res.json();
+          setStore('coreProposals', proposals);
+        }
+      } catch { /* ignore */ }
+    }
+  }, 1000);
+};
+
+export const setCoreEngineMode = async (mode: string) => {
+  try {
+    const res = await fetch('http://localhost:8002/core/mode', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ mode }),
+    });
+    if (res.ok) {
+      const data = await res.json();
+      setStore('coreMode', data.mode);
+      addNotification('Engine Mode Updated', `Core Mode is now ${data.mode}`, 'info', 'ailab');
+    }
+  } catch {
+    addNotification('Connection Error', 'Could not update core engine mode', 'error');
+  }
+};
+
+export const approveCoreProposal = async (symbol: string) => {
+  try {
+    const res = await fetch('http://localhost:8002/core/order/approve', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ symbol }),
+    });
+    if (res.ok) {
+      const data = await res.json();
+      if (data.status === 'ok') {
+        addNotification('Proposal Approved', `Order submitted successfully for ${symbol}`, 'success', 'ailab');
+      } else {
+        addNotification('Approval Rejected', data.message || 'Execution failed', 'error');
+      }
+    }
+  } catch {
+    addNotification('Connection Error', 'Could not approve order proposal', 'error');
+  }
+};
+
+export const rejectCoreProposal = async (symbol: string) => {
+  try {
+    const res = await fetch('http://localhost:8002/core/order/reject', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ symbol }),
+    });
+    if (res.ok) {
+      addNotification('Proposal Rejected', `Order proposal for ${symbol} discarded`, 'info', 'ailab');
+    }
+  } catch {
+    addNotification('Connection Error', 'Could not discard order proposal', 'error');
+  }
+};
+
+export const tripCoreKillSwitch = async () => {
+  try {
+    const res = await fetch('http://localhost:8002/core/kill', { method: 'POST' });
+    if (res.ok) {
+      setStore('coreKillSwitchActive', true);
+      addNotification('KILL SWITCH ACTIVE', 'All AI execution blocked immediately!', 'error', 'ailab');
+    }
+  } catch {
+    addNotification('Connection Error', 'Could not trigger kill switch', 'error');
+  }
+};
+
+export const resetCoreKillSwitch = async () => {
+  try {
+    const res = await fetch('http://localhost:8002/core/reset-kill', { method: 'POST' });
+    if (res.ok) {
+      setStore('coreKillSwitchActive', false);
+      addNotification('Kill Switch Reset', 'AI execution re-enabled.', 'success', 'ailab');
+    }
+  } catch {
+    addNotification('Connection Error', 'Could not reset kill switch', 'error');
+  }
+};
+
+export const clearCoreData = async () => {
+  try {
+    const res = await fetch('http://localhost:8002/core/clear', { method: 'POST' });
+    if (res.ok) {
+      addNotification('Core Data Cleared', 'Shadow engine history, positions, and orders reset.', 'warning', 'ailab');
+    }
+  } catch {
+    addNotification('Connection Error', 'Could not clear core engine data', 'error');
+  }
+};
+
+export const updateSymbolColorLabel = (symbol: string, color: 'red' | 'blue' | 'green' | 'orange' | 'none') => {
+  const clean = symbol.trim().toUpperCase();
+  if (store.symbols[clean]) {
+    setStore('symbols', clean, 'colorLabel', color);
+  }
+};
+
+export const setActiveChartSymbol = (symbol: string) => {
+  setStore('activeChartSymbol', symbol);
+};
+
+export const setSelectedOrderId = (id: string | null) => {
+  setStore('selectedOrderId', id);
+};
+
+export const fetchSymbolQuote = async (symbol: string) => {
+  if (!store.brokerConnected) return;
+  try {
+    const res = await fetch(`${SIDECAR}/api/kotak/quotes?symbols=${encodeURIComponent(symbol)}`);
+    if (res.ok) {
+      applyQuotePayload(await res.json());
+    }
+  } catch (e) {
+    console.error('fetchSymbolQuote failed:', e);
+  }
+};
+
+export const syncPositionMark = (symbol: string, ltp: number) => {
+  setStore('positions', (p) => p.inst === symbol, (pos) => {
+    const pnl = (ltp - pos.avg) * pos.qty;
+    const pct = pos.avg > 0 ? (pnl / (pos.avg * Math.abs(pos.qty || 1))) * 100 : 0;
+    return { ltp, pnl: Number(pnl.toFixed(2)), pct: Number(pct.toFixed(2)), up: pnl >= 0 };
+  });
 };
 
 export { store };

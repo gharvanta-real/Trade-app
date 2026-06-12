@@ -1,4 +1,4 @@
-import { createSignal, createEffect, For, Show, onCleanup } from 'solid-js';
+import { createSignal, createEffect, For, Show, onCleanup, onMount } from 'solid-js';
 import type { Component } from 'solid-js';
 import { store, updateSetting, addNotification } from '../../store/tradingStore';
 import './settings.css';
@@ -15,6 +15,7 @@ interface CredentialForm {
 }
 
 const SIDECAR = 'http://localhost:8001';
+const SETTINGS_STORAGE_KEY = 'tradesk-user-settings';
 const TABS = [
   'Profile',
   'Trading',
@@ -69,6 +70,13 @@ export const SettingsPage: Component<SettingsPageProps> = (props) => {
   const [profileName, setProfileName] = createSignal('Aman Trader');
   const [profileEmail, setProfileEmail] = createSignal('aman.trader@example.com');
 
+  // security and diagnostic preferences
+  const [twoFactorEnabled, setTwoFactorEnabled] = createSignal(true);
+  const [loginAlertsEnabled, setLoginAlertsEnabled] = createSignal(true);
+  const [debugLogging, setDebugLogging] = createSignal(false);
+  const [verboseConsole, setVerboseConsole] = createSignal(false);
+  const [lastSyncedAt, setLastSyncedAt] = createSignal('Not synced yet');
+
   // API tab state
   const [connStatus, setConnStatus] = createSignal<ConnectionStatus>('DISCONNECTED');
   const [apiError, setApiError] = createSignal('');
@@ -83,6 +91,7 @@ export const SettingsPage: Component<SettingsPageProps> = (props) => {
   let pollTimer: ReturnType<typeof setInterval> | undefined;
 
   const startPolling = () => {
+    stopPolling();
     pollTimer = setInterval(async () => {
       try {
         const r = await fetch(`${SIDECAR}/api/kotak/status`);
@@ -168,19 +177,112 @@ export const SettingsPage: Component<SettingsPageProps> = (props) => {
     (e: Event) => setForm(f => ({ ...f, [key]: (e.currentTarget as HTMLInputElement).value }));
 
   // Global settings handlers
+  const buildSettingsSnapshot = () => ({
+    theme: props.theme(),
+    density: density(),
+    accentColor: accentColor(),
+    fontSize: fontSize(),
+    roundedCharts: roundedCharts(),
+    subtleBlur: subtleBlur(),
+    reducedMotion: reducedMotion(),
+    rememberWorkspace: rememberWorkspace(),
+    autoSaveLayout: autoSaveLayout(),
+    stickyOrderPanel: stickyOrderPanel(),
+    showAiCopilot: showAiCopilot(),
+    showMarketBreadth: showMarketBreadth(),
+    showKeyboardHints: showKeyboardHints(),
+    defaultOrderType: defaultOrderType(),
+    defaultProduct: defaultProduct(),
+    qtyPresets: qtyPresets(),
+    panicExitConfirmation: panicExitConfirmation(),
+    preferredScalpingShortcuts: preferredScalpingShortcuts(),
+    defaultTimeframe: defaultTimeframe(),
+    candleType: candleType(),
+    indicatorVisibility: indicatorVisibility(),
+    vwapAutoLoad: vwapAutoLoad(),
+    crosshairBehavior: crosshairBehavior(),
+    priceLadderVisibility: priceLadderVisibility(),
+    profileName: profileName(),
+    profileEmail: profileEmail(),
+    twoFactorEnabled: twoFactorEnabled(),
+    loginAlertsEnabled: loginAlertsEnabled(),
+    debugLogging: debugLogging(),
+    verboseConsole: verboseConsole(),
+    settings: { ...store.settings },
+  });
+
+  const applyStoredSettings = (saved: Partial<ReturnType<typeof buildSettingsSnapshot>>) => {
+    if (saved.theme === 'dark' || saved.theme === 'light') props.setTheme(saved.theme);
+    if (saved.density === 'comfortable' || saved.density === 'compact') setDensity(saved.density);
+    if (saved.accentColor === 'violet' || saved.accentColor === 'blue' || saved.accentColor === 'green' || saved.accentColor === 'orange') setAccentColor(saved.accentColor);
+    if (typeof saved.fontSize === 'number') setFontSize(saved.fontSize);
+    if (typeof saved.roundedCharts === 'boolean') setRoundedCharts(saved.roundedCharts);
+    if (typeof saved.subtleBlur === 'boolean') setSubtleBlur(saved.subtleBlur);
+    if (typeof saved.reducedMotion === 'boolean') setReducedMotion(saved.reducedMotion);
+    if (typeof saved.rememberWorkspace === 'boolean') setRememberWorkspace(saved.rememberWorkspace);
+    if (typeof saved.autoSaveLayout === 'boolean') setAutoSaveLayout(saved.autoSaveLayout);
+    if (typeof saved.stickyOrderPanel === 'boolean') setStickyOrderPanel(saved.stickyOrderPanel);
+    if (typeof saved.showAiCopilot === 'boolean') setShowAiCopilot(saved.showAiCopilot);
+    if (typeof saved.showMarketBreadth === 'boolean') setShowMarketBreadth(saved.showMarketBreadth);
+    if (typeof saved.showKeyboardHints === 'boolean') setShowKeyboardHints(saved.showKeyboardHints);
+    if (typeof saved.defaultOrderType === 'string') setDefaultOrderType(saved.defaultOrderType);
+    if (typeof saved.defaultProduct === 'string') setDefaultProduct(saved.defaultProduct);
+    if (typeof saved.qtyPresets === 'string') setQtyPresets(saved.qtyPresets);
+    if (typeof saved.panicExitConfirmation === 'boolean') setPanicExitConfirmation(saved.panicExitConfirmation);
+    if (typeof saved.preferredScalpingShortcuts === 'string') setPreferredScalpingShortcuts(saved.preferredScalpingShortcuts);
+    if (typeof saved.defaultTimeframe === 'string') setDefaultTimeframe(saved.defaultTimeframe);
+    if (typeof saved.candleType === 'string') setCandleType(saved.candleType);
+    if (typeof saved.indicatorVisibility === 'string') setIndicatorVisibility(saved.indicatorVisibility);
+    if (typeof saved.vwapAutoLoad === 'boolean') setVwapAutoLoad(saved.vwapAutoLoad);
+    if (typeof saved.crosshairBehavior === 'string') setCrosshairBehavior(saved.crosshairBehavior);
+    if (typeof saved.priceLadderVisibility === 'string') setPriceLadderVisibility(saved.priceLadderVisibility);
+    if (typeof saved.profileName === 'string') setProfileName(saved.profileName);
+    if (typeof saved.profileEmail === 'string') setProfileEmail(saved.profileEmail);
+    if (typeof saved.twoFactorEnabled === 'boolean') setTwoFactorEnabled(saved.twoFactorEnabled);
+    if (typeof saved.loginAlertsEnabled === 'boolean') setLoginAlertsEnabled(saved.loginAlertsEnabled);
+    if (typeof saved.debugLogging === 'boolean') setDebugLogging(saved.debugLogging);
+    if (typeof saved.verboseConsole === 'boolean') setVerboseConsole(saved.verboseConsole);
+    if (saved.settings) {
+      (Object.entries(saved.settings) as Array<[keyof typeof store.settings, unknown]>).forEach(([key, value]) => {
+        updateSetting(key, value as never);
+      });
+    }
+  };
+
+  onMount(() => {
+    try {
+      const saved = localStorage.getItem(SETTINGS_STORAGE_KEY);
+      if (saved) applyStoredSettings(JSON.parse(saved));
+    } catch {
+      localStorage.removeItem(SETTINGS_STORAGE_KEY);
+    }
+  });
+
   const handleSaveAllSettings = () => {
+    localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(buildSettingsSnapshot()));
     addNotification('Settings Saved', 'Preferences updated and saved to local configuration.', 'success', 'settings');
   };
 
+  const handlePreviewChanges = () => {
+    const mode = props.theme() === 'dark' ? 'Dark' : 'Light';
+    addNotification(
+      'Settings Preview',
+      `${mode} theme, ${density()} density, ${defaultOrderType()} ${defaultProduct()} orders selected.`,
+      'info',
+      'settings'
+    );
+  };
+
   const handleResetToDefault = () => {
-    updateSetting('theme', 'dark');
+    props.setTheme('light');
+    updateSetting('theme', 'light');
     updateSetting('refreshRate', 2);
     updateSetting('timezone', 'kolkata');
     updateSetting('notificationTimeout', 6);
     updateSetting('soundAlerts', true);
     updateSetting('confirmOrder', true);
     updateSetting('showSummary', true);
-    updateSetting('autoSquareOff', true);
+    updateSetting('autoSquareOff', false);
     updateSetting('chartType', 'candlestick');
     updateSetting('showGrid', true);
     updateSetting('showVolume', true);
@@ -208,11 +310,23 @@ export const SettingsPage: Component<SettingsPageProps> = (props) => {
     setVwapAutoLoad(true);
     setCrosshairBehavior('Magnet');
     setPriceLadderVisibility('Always Visible');
+    setTwoFactorEnabled(true);
+    setLoginAlertsEnabled(true);
+    setDebugLogging(false);
+    setVerboseConsole(false);
+    localStorage.removeItem(SETTINGS_STORAGE_KEY);
 
     addNotification('Settings Reset', 'Configuration values restored to defaults.', 'info', 'settings');
   };
 
   const handleSyncNow = () => {
+    setLastSyncedAt(new Date().toLocaleString('en-IN', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    }));
     addNotification('Backup Sync', 'Workspace cloud backup completed successfully.', 'success', 'settings');
   };
 
@@ -725,14 +839,14 @@ export const SettingsPage: Component<SettingsPageProps> = (props) => {
                   <div class="api-broker-logo">KN</div>
                   <div>
                     <span class="profile-info-name">Kotak Neo Terminal v2.0</span>
-                    <div class="profile-info-email">REST Sidecar (8001) · Feed Handler (8002)</div>
+                    <div class="profile-info-email">REST Sidecar (8001) - Feed Handler (8002)</div>
                   </div>
                 </div>
 
                 <div class={`api-status-badge-inline ${connStatus().toLowerCase()}`}>
                   <span class="api-status-dot-pulse" />
                   {connStatus() === 'CONNECTED' ? 'Connected'
-                    : connStatus() === 'CONNECTING' ? 'Connecting…'
+                    : connStatus() === 'CONNECTING' ? 'Connecting...'
                     : 'Disconnected'}
                 </div>
               </div>
@@ -758,14 +872,14 @@ export const SettingsPage: Component<SettingsPageProps> = (props) => {
 
                   <div class="api-field api-field--full">
                     <label class="panel-section-lbl">Consumer Key</label>
-                    <input class="panel-input" placeholder="From Kotak Neo → Invest → Trade API"
+                    <input class="panel-input" placeholder="From Kotak Neo > Invest > Trade API"
                       value={form().consumer_key} onInput={updateField('consumer_key')} />
                   </div>
 
                   <div class="api-field">
                     <label class="panel-section-lbl">MPIN (6-digit)</label>
                     <input class="panel-input" type="password" maxLength={6}
-                      placeholder="••••••" value={form().mpin} onInput={updateField('mpin')} />
+                      placeholder="******" value={form().mpin} onInput={updateField('mpin')} />
                   </div>
 
                   <div class="api-field">
@@ -782,7 +896,7 @@ export const SettingsPage: Component<SettingsPageProps> = (props) => {
                         onInput={updateField('totp_secret')}
                       />
                       <button class="api-eye-btn" type="button" onClick={() => setShowTotp(v => !v)}>
-                        {showTotp() ? '🙈' : '👁'}
+                        {showTotp() ? 'Hide' : 'Show'}
                       </button>
                     </div>
                   </div>
@@ -790,14 +904,14 @@ export const SettingsPage: Component<SettingsPageProps> = (props) => {
 
                 <div class="api-actions" style="margin-top: var(--sys-space-4);">
                   <button class="footer-btn-outline" onClick={handleSave} disabled={saving()}>
-                    {saving() ? 'Saving…' : 'Save Credentials'}
+                    {saving() ? 'Saving...' : 'Save Credentials'}
                   </button>
                   <button
                     class="footer-btn-solid-submit"
                     onClick={handleLogin}
                     disabled={logging() || connStatus() === 'CONNECTED'}
                   >
-                    {logging() ? 'Connecting…' : connStatus() === 'CONNECTED' ? '✓ Connected' : 'Connect API'}
+                    {logging() ? 'Connecting...' : connStatus() === 'CONNECTED' ? 'Connected' : 'Connect API'}
                   </button>
                 </div>
               </div>
@@ -836,13 +950,19 @@ export const SettingsPage: Component<SettingsPageProps> = (props) => {
               <div class="settings-toggles-row-grid">
                 <div class="settings-toggle-item-row">
                   <span>Two-Factor Authentication</span>
-                  <div class="settings-switch-toggle on">
+                  <div
+                    class={`settings-switch-toggle ${twoFactorEnabled() ? 'on' : ''}`}
+                    onClick={() => setTwoFactorEnabled(prev => !prev)}
+                  >
                     <div class="slider-thumb" />
                   </div>
                 </div>
                 <div class="settings-toggle-item-row">
                   <span>Login Alerts</span>
-                  <div class="settings-switch-toggle on">
+                  <div
+                    class={`settings-switch-toggle ${loginAlertsEnabled() ? 'on' : ''}`}
+                    onClick={() => setLoginAlertsEnabled(prev => !prev)}
+                  >
                     <div class="slider-thumb" />
                   </div>
                 </div>
@@ -857,13 +977,19 @@ export const SettingsPage: Component<SettingsPageProps> = (props) => {
               <div class="settings-toggles-row-grid">
                 <div class="settings-toggle-item-row">
                   <span>Debug Logging</span>
-                  <div class="settings-switch-toggle">
+                  <div
+                    class={`settings-switch-toggle ${debugLogging() ? 'on' : ''}`}
+                    onClick={() => setDebugLogging(prev => !prev)}
+                  >
                     <div class="slider-thumb" />
                   </div>
                 </div>
                 <div class="settings-toggle-item-row">
                   <span>Verbose Console Output</span>
-                  <div class="settings-switch-toggle">
+                  <div
+                    class={`settings-switch-toggle ${verboseConsole() ? 'on' : ''}`}
+                    onClick={() => setVerboseConsole(prev => !prev)}
+                  >
                     <div class="slider-thumb" />
                   </div>
                 </div>
@@ -880,7 +1006,7 @@ export const SettingsPage: Component<SettingsPageProps> = (props) => {
           </button>
           
           <div class="footer-btn-right-row">
-            <button class="footer-btn-outline">
+            <button class="footer-btn-outline" onClick={handlePreviewChanges}>
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
                 <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
                 <circle cx="12" cy="12" r="3" />
@@ -1011,7 +1137,9 @@ export const SettingsPage: Component<SettingsPageProps> = (props) => {
                 </span>
                 <span class="list-row-item-name">Two-Factor Authentication</span>
               </div>
-              <span class="list-row-item-status-tag enabled">Enabled</span>
+              <span class={`list-row-item-status-tag ${twoFactorEnabled() ? 'enabled' : 'inactive'}`}>
+                {twoFactorEnabled() ? 'Enabled' : 'Off'}
+              </span>
             </div>
 
             <div class="sidebar-list-row-item">
@@ -1023,7 +1151,9 @@ export const SettingsPage: Component<SettingsPageProps> = (props) => {
                 </span>
                 <span class="list-row-item-name">Login Alerts</span>
               </div>
-              <span class="list-row-item-status-tag enabled">Enabled</span>
+              <span class={`list-row-item-status-tag ${loginAlertsEnabled() ? 'enabled' : 'inactive'}`}>
+                {loginAlertsEnabled() ? 'Enabled' : 'Off'}
+              </span>
             </div>
 
             <div class="sidebar-list-row-item">
@@ -1082,7 +1212,7 @@ export const SettingsPage: Component<SettingsPageProps> = (props) => {
 
           <div class="sync-time-row">
             <span>Last Synced</span>
-            <span class="sync-time-val">24 May 2024, 09:45 AM</span>
+            <span class="sync-time-val">{lastSyncedAt()}</span>
           </div>
 
           <div class="sync-action-row">

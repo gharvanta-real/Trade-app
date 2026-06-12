@@ -6,8 +6,8 @@
 ///
 /// Port 8002  →  ws://localhost:8002/ws   (frontend connects here)
 /// Port 8001  →  Python sidecar           (polled for session token)
-
 mod client;
+mod core_bridge;
 mod parser;
 mod server;
 mod socketio;
@@ -17,8 +17,8 @@ use std::sync::Arc;
 use tracing::info;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
-const BIND_ADDR:    &str = "127.0.0.1:8002";
-const SIDECAR_URL:  &str = "http://127.0.0.1:8001";
+const BIND_ADDR: &str = "127.0.0.1:8002";
+const SIDECAR_URL: &str = "http://127.0.0.1:8001";
 
 #[tokio::main]
 async fn main() {
@@ -44,9 +44,12 @@ async fn main() {
 
     // Task 2: Axum WebSocket server
     let router = server::build_router(Arc::clone(&state));
-    let listener = tokio::net::TcpListener::bind(BIND_ADDR).await
+    let listener = tokio::net::TcpListener::bind(BIND_ADDR)
+        .await
         .expect("Failed to bind feed-handler port 8002");
 
     info!("Feed handler WS server listening on ws://{BIND_ADDR}/ws");
-    axum::serve(listener, router).await.expect("Axum server error");
+    axum::serve(listener, router)
+        .await
+        .expect("Axum server error");
 }

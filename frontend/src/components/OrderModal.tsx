@@ -51,6 +51,15 @@ export const OrderModal: Component<OrderModalProps> = (props) => {
   const isInsufficient = () => side() === 'Buy' && available() > 0 && netValue() > available();
 
   createEffect(() => {
+    if (!props.isOpen()) return;
+    const nextSymbol = props.defaultSymbol || 'NIFTY 50';
+    setSelectedInst(nextSymbol);
+    setSearchQuery(nextSymbol);
+    setSide(props.defaultSide || 'Buy');
+    setShowSearch(false);
+  });
+
+  createEffect(() => {
     const inst = selectedInst();
     const lp = store.symbols[inst]?.price || 0;
     setPrice(lp);
@@ -109,7 +118,7 @@ export const OrderModal: Component<OrderModalProps> = (props) => {
         type: orderType(),
         qty: qty(),
         price: effectivePrice(),
-        trigger: triggerPrice(),
+        trigger: orderType() === 'SL' || orderType() === 'SL-M' ? triggerPrice() : 0,
         prod: product(),
         validity: validity(),
         amo: amo(),

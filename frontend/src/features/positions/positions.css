@@ -167,9 +167,8 @@
 
 /* Main Split Body */
 .pos-split-body {
-  display: grid;
-  grid-template-columns: 2.4fr 1fr;
-  gap: 0;
+  display: flex;
+  width: 100%;
   align-items: stretch;
   flex: 1;
   min-height: 0;
@@ -180,7 +179,8 @@
   display: flex;
   flex-direction: column;
   gap: 0;
-  border-right: 1px solid var(--theme-border-light);
+  flex: 1;
+  min-width: 0;
   overflow-y: auto;
   height: 100%;
 }
@@ -529,11 +529,289 @@
 
 /* Right Column Sidebar */
 .pos-right-col {
+  width: 360px;
+  flex-shrink: 0;
   display: flex;
   flex-direction: column;
-  gap: 0;
-  overflow-y: auto;
   height: 100%;
+  background: var(--theme-bg-surface);
+  overflow: hidden;
+  border-left: 1px solid var(--theme-border-light);
+  transition: width 0.3s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.3s cubic-bezier(0.16, 1, 0.3, 1), border-left-color 0.3s ease;
+}
+
+.pos-split-body.hide-panel .pos-right-col {
+  width: 0;
+  opacity: 0;
+  border-left-color: transparent;
+  border-left-width: 0;
+  pointer-events: none;
+}
+
+.pos-split-body.show-panel .pos-right-col {
+  width: 360px;
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.pos-details-panel {
+  display: flex;
+  flex-direction: column;
+  padding: var(--sys-space-4);
+  gap: var(--sys-space-4);
+  height: 100%;
+  box-sizing: border-box;
+  overflow-y: auto;
+}
+
+.detail-header-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  border-bottom: 1px solid var(--theme-border-light);
+  padding-bottom: var(--sys-space-3);
+}
+
+.detail-title-main {
+  font-family: var(--sys-font-display);
+  font-weight: 700;
+  font-size: 14px;
+  color: var(--theme-text-primary);
+  margin: 0;
+}
+
+.detail-exchange-lbl {
+  font-size: 10px;
+  color: var(--theme-text-muted);
+  font-weight: 500;
+}
+
+.detail-header-actions {
+  display: flex;
+  gap: var(--sys-space-2);
+}
+
+.detail-close-btn {
+  background: transparent;
+  border: none;
+  color: var(--theme-text-muted);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: var(--sys-radius-sm);
+  transition: all 0.2s ease;
+  font-size: 18px;
+}
+
+.detail-close-btn:hover {
+  background: var(--theme-bg-surface-elevated);
+  color: var(--theme-text-primary);
+}
+
+.detail-price-row {
+  display: flex;
+  align-items: center;
+  gap: var(--sys-space-3);
+}
+
+.detail-ltp-val {
+  font-size: 20px;
+  font-weight: 700;
+  font-family: var(--sys-font-mono);
+  color: var(--theme-text-primary);
+}
+
+.detail-change-badge {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: var(--sys-radius-sm);
+  font-family: var(--sys-font-mono);
+}
+
+.detail-change-badge.up {
+  background-color: rgba(16, 185, 129, 0.08);
+  color: var(--theme-color-up);
+}
+
+.detail-change-badge.down {
+  background-color: rgba(244, 63, 94, 0.08);
+  color: var(--theme-color-down);
+}
+
+.detail-market-state {
+  display: flex;
+  align-items: center;
+  gap: var(--sys-space-2);
+  font-size: 10px;
+}
+
+.state-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: var(--sys-radius-round);
+}
+
+.state-dot.live {
+  background-color: var(--sys-color-emerald-500);
+}
+
+.state-text {
+  color: var(--theme-color-up);
+  font-weight: 600;
+}
+
+.state-time {
+  color: var(--theme-text-muted);
+}
+
+/* Bid Ask quotes progress representation */
+.bid-ask-box {
+  background: var(--theme-bg-surface-elevated);
+  border: 1px solid var(--theme-border-light);
+  border-radius: var(--sys-radius-md);
+  padding: var(--sys-space-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sys-space-2);
+}
+
+.quote-side {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.quote-header {
+  display: flex;
+  justify-content: space-between;
+  font-size: 10px;
+  color: var(--theme-text-secondary);
+}
+
+.quote-header span:first-child {
+  color: var(--theme-text-muted);
+}
+
+.quote-side.buy .quote-header span:last-child { color: var(--theme-color-up); }
+.quote-side.sell .quote-header span:last-child { color: var(--theme-color-down); }
+
+.quote-bar-wrapper {
+  height: 4px;
+  background-color: var(--theme-border);
+  border-radius: var(--sys-radius-round);
+  overflow: hidden;
+  width: 100%;
+}
+
+.quote-bar {
+  height: 100%;
+}
+
+.quote-side.buy .quote-bar { background-color: var(--theme-color-up); }
+.quote-side.sell .quote-bar { background-color: var(--theme-color-down); }
+
+/* Metrics key stats */
+.detail-metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--sys-space-3) var(--sys-space-2);
+}
+
+.metric-card {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.metric-lbl {
+  font-size: 10px;
+  color: var(--theme-text-muted);
+  font-weight: 500;
+}
+
+.metric-val {
+  font-size: 11px;
+  color: var(--theme-text-primary);
+  font-weight: 600;
+}
+
+/* Chart filters and SVG */
+.detail-chart-wrapper {
+  background: var(--theme-bg-surface-elevated);
+  border: 1px solid var(--theme-border-light);
+  border-radius: var(--sys-radius-md);
+  padding: var(--sys-space-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sys-space-3);
+}
+
+.detail-svg-chart-container {
+  position: relative;
+  height: 90px;
+  width: 100%;
+}
+
+.detail-sparkline-svg {
+  width: 100%;
+  height: 90px;
+  display: block;
+}
+
+/* Order execution actions */
+.detail-order-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--sys-space-3);
+}
+
+.order-btn {
+  border: none;
+  color: var(--sys-color-white);
+  font-weight: 700;
+  font-size: 12px;
+  padding: var(--sys-space-2-5) 0;
+  border-radius: var(--sys-radius-md);
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  text-align: center;
+}
+
+.order-btn:hover {
+  transform: translateY(-1px);
+}
+
+.order-btn.buy {
+  background: var(--sys-color-blue-500);
+}
+
+.order-btn.buy:hover {
+  background: var(--sys-color-blue-600);
+}
+
+.order-btn.sell {
+  background: var(--sys-color-rose-500);
+}
+
+.order-btn.sell:hover {
+  background: var(--sys-color-rose-600);
+}
+
+.pos-table tr.active-row td {
+  background-color: rgba(59, 130, 246, 0.04) !important;
+  color: var(--theme-text-primary);
+}
+
+.pos-table tr.active-row {
+  position: relative;
+}
+
+.pos-table tr.active-row td:first-child {
+  box-shadow: inset 3px 0 0 var(--sys-color-blue-500);
 }
 
 .summary-box-pos {

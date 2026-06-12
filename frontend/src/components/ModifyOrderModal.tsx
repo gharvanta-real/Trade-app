@@ -29,7 +29,7 @@ export const ModifyOrderModal: Component<ModifyOrderModalProps> = (props) => {
     }
   });
 
-  const typeMap: Record<string, string> = { 'Market': 'M', 'Limit': 'L', 'SL': 'SL', 'SL-M': 'SL-M' };
+  const typeMap: Record<string, string> = { 'Market': 'MKT', 'Limit': 'L', 'SL': 'SL', 'SL-M': 'SL-M' };
   const txnMap: Record<string, string> = { 'Buy': 'B', 'Sell': 'S' };
 
   const handleModify = async () => {

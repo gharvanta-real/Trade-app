@@ -1,0 +1,1066 @@
+/* ==========================================
+   AI LAB / STRATEGY BUILDER STYLES
+   ========================================== */
+
+@import "../charting/workspace.css";
+
+.ailab-page-layout {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+  box-sizing: border-box;
+  background-color: var(--theme-bg-surface);
+}
+
+.ailab-title-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--sys-space-3) var(--sys-space-4);
+  border-bottom: 1px solid var(--theme-border-light);
+  background: var(--theme-bg-surface);
+}
+
+.ailab-title-left {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.ailab-title-text {
+  font-family: var(--sys-font-display);
+  font-weight: 700;
+  font-size: 18px;
+  color: var(--theme-text-primary);
+  margin: 0;
+}
+
+.ailab-sub-text {
+  font-size: 11px;
+  color: var(--theme-text-muted);
+  margin: 0;
+}
+
+.ailab-header-actions-right {
+  display: flex;
+  gap: var(--sys-space-3);
+  align-items: center;
+}
+
+/* Premium Header Action Buttons */
+.ailab-btn-how-works,
+.ailab-btn-new-experiment {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sys-space-1-5);
+  padding: 6px var(--sys-space-3);
+  font-family: var(--sys-font-display);
+  font-size: 11px;
+  font-weight: 600;
+  border-radius: var(--sys-radius-md);
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  user-select: none;
+  white-space: nowrap;
+  outline: none;
+}
+
+.ailab-btn-icon {
+  flex-shrink: 0;
+  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Secondary Button: How AI Labs Works */
+.ailab-btn-how-works {
+  background: var(--theme-bg-surface-elevated);
+  border: 1px solid var(--theme-border-light);
+  color: var(--theme-text-secondary);
+}
+
+.ailab-btn-how-works:hover {
+  background: var(--theme-bg-surface-hover);
+  border-color: var(--theme-text-secondary);
+  color: var(--theme-text-primary);
+  transform: translateY(-1px);
+}
+
+.ailab-btn-how-works:hover .ailab-btn-icon {
+  transform: scale(1.1) rotate(15deg);
+}
+
+.ailab-btn-how-works:active {
+  transform: translateY(0) scale(0.97);
+  background: var(--theme-bg-active);
+}
+
+/* Primary Button: New Experiment */
+.ailab-btn-new-experiment {
+  background: var(--sys-color-violet-500);
+  border: 1px solid var(--theme-border-light);
+  color: #ffffff;
+}
+
+[data-theme="dark"] .ailab-btn-new-experiment {
+  background: var(--sys-color-violet-500);
+  border: 1px solid var(--theme-border-light);
+}
+
+.ailab-btn-new-experiment:hover {
+  background: var(--sys-color-violet-600);
+  transform: translateY(-1px);
+}
+
+[data-theme="dark"] .ailab-btn-new-experiment:hover {
+  background: var(--sys-color-violet-600);
+}
+
+.ailab-btn-new-experiment:hover .ailab-btn-icon {
+  transform: scale(1.1) rotate(90deg);
+}
+
+.ailab-btn-new-experiment:active {
+  transform: translateY(0) scale(0.97);
+}
+
+.bg-translucent {
+  opacity: 0.9;
+}
+
+.ailab-header-badge {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 1px solid var(--theme-border-light);
+  background: var(--theme-bg-surface-elevated);
+  color: var(--theme-text-secondary);
+  cursor: pointer;
+}
+
+.badge-dot-count {
+  position: absolute;
+  top: -3px;
+  right: -3px;
+  background: var(--theme-color-down);
+  color: white;
+  font-size: 8px;
+  font-weight: 700;
+  border-radius: var(--sys-radius-round);
+  padding: 1px 4px;
+  line-height: 1;
+}
+
+.ailab-user-profile-badge {
+  display: flex;
+  align-items: center;
+  gap: var(--sys-space-2);
+  padding: 2px var(--sys-space-3) 2px 2px;
+  border: 1px solid var(--theme-border-light);
+  border-radius: var(--sys-radius-round);
+  background: var(--theme-bg-surface-elevated);
+  cursor: pointer;
+  color: var(--theme-text-primary);
+}
+
+.profile-avatar-sm {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--theme-color-ai);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 9px;
+  font-weight: 700;
+}
+
+.profile-name-sm {
+  font-size: 11px;
+}
+
+.ailab-tabs-bar {
+  border-bottom: 1px solid var(--theme-border-light);
+  padding: 0 var(--sys-space-4);
+  background: var(--theme-bg-surface);
+}
+
+.ailab-panel-main {
+  background: var(--theme-bg-surface);
+  border: none;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  overflow: hidden;
+}
+
+/* ── Dashboard split grid ───────────────────────────────────────── */
+.ailab-dashboard-split {
+  display: grid;
+  grid-template-columns: 2.4fr 1fr;
+  gap: 0;
+  height: 100%;
+  overflow: hidden;
+}
+
+.ailab-dash-left {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  overflow-y: auto;
+  border-right: 1px solid var(--theme-border-light);
+  height: 100%;
+}
+
+.ailab-dash-right {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  overflow-y: auto;
+  height: 100%;
+}
+
+/* ── Welcome Banner ─────────────────────────────────────────────── */
+.ailab-welcome-banner {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--sys-space-3) var(--sys-space-4);
+  border-bottom: 1px solid var(--theme-border-light);
+  background: var(--theme-bg-surface);
+}
+
+.welcome-text-side {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sys-space-2);
+  max-width: 80%;
+}
+
+.welcome-heading {
+  font-family: var(--sys-font-display);
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--theme-text-primary);
+  margin: 0;
+}
+
+.welcome-para {
+  font-size: 12px;
+  color: var(--theme-text-secondary);
+  line-height: 1.4;
+  margin: 0;
+}
+
+.welcome-badges-row {
+  display: flex;
+  gap: var(--sys-space-2);
+  flex-wrap: wrap;
+  margin-top: var(--sys-space-1);
+}
+
+.welcome-badge {
+  font-size: 9px;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: var(--sys-radius-sm);
+  background: var(--theme-bg-surface-elevated);
+  border: 1px solid var(--theme-border-light);
+  color: var(--theme-text-secondary);
+}
+
+.welcome-robot-graphic {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* ── Actions buttons grid ────────────────────────────────────────── */
+.ailab-actions-section {
+  padding: var(--sys-space-3) var(--sys-space-4);
+  border-bottom: 1px solid var(--theme-border-light);
+}
+
+.actions-section-title {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--theme-text-muted);
+  margin-bottom: var(--sys-space-3);
+  display: block;
+}
+
+.ailab-actions-buttons-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--sys-space-2-5);
+}
+
+.action-tile-btn {
+  display: flex;
+  align-items: center;
+  gap: var(--sys-space-2-5);
+  padding: var(--sys-space-2) var(--sys-space-3);
+  border: 1px solid var(--theme-border-light);
+  border-radius: var(--sys-radius-md);
+  background: var(--theme-bg-surface-elevated);
+  cursor: pointer;
+  transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+  text-align: left;
+  color: var(--theme-text-primary);
+}
+
+.action-tile-btn:hover {
+  background: var(--theme-bg-surface-hover);
+  border-color: var(--theme-color-ai);
+  transform: translateY(-1px);
+}
+
+.action-tile-icon {
+  font-size: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--sys-radius-sm);
+  flex-shrink: 0;
+}
+
+.action-tile-icon.purple { background: rgba(96, 165, 250, 0.08); color: #60a5fa; }
+.action-tile-icon.pink { background: rgba(244, 63, 94, 0.08); color: #f43f5e; }
+.action-tile-icon.blue { background: rgba(59, 130, 246, 0.08); color: #3b82f6; }
+.action-tile-icon.green { background: rgba(16, 185, 129, 0.08); color: #10b981; }
+.action-tile-icon.orange { background: rgba(245, 158, 11, 0.08); color: #f59e0b; }
+.action-tile-icon.gray { background: var(--theme-bg-active); color: var(--theme-text-secondary); }
+
+.action-tile-lbl-box {
+  display: flex;
+  flex-direction: column;
+}
+
+.action-tile-lbl {
+  font-size: 12px;
+  color: var(--theme-text-primary);
+}
+
+.action-tile-sub {
+  font-size: 9px;
+  color: var(--theme-text-muted);
+}
+
+/* ── Splits row ─────────────────────────────────────────────────── */
+.ailab-overview-splits-row {
+  display: grid;
+  grid-template-columns: 1.4fr 1fr;
+  border-bottom: 1px solid var(--theme-border-light);
+}
+
+.overview-split-cell {
+  padding: var(--sys-space-3) var(--sys-space-4);
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid var(--theme-border-light);
+  box-sizing: border-box;
+}
+
+.overview-split-cell:last-child {
+  border-right: none;
+}
+
+.split-cell-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--sys-space-3);
+}
+
+.split-cell-title {
+  font-size: 13px;
+  color: var(--theme-text-primary);
+}
+
+.live-indicator-pill {
+  font-size: 8px;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: var(--sys-radius-round);
+  background: rgba(16, 185, 129, 0.1);
+  color: var(--theme-color-up);
+  border: 1px solid rgba(16, 185, 129, 0.2);
+  text-transform: uppercase;
+}
+
+.preview-indicator-pill {
+  font-size: 8px;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: var(--sys-radius-round);
+  background: rgba(168, 85, 247, 0.1);
+  color: var(--theme-color-neutral);
+  border: 1px solid rgba(168, 85, 247, 0.2);
+  text-transform: uppercase;
+}
+
+/* ── Market Intel subcomponents ─────────────────────────────────── */
+.market-intel-content {
+  display: grid;
+  grid-template-columns: 1fr 1.1fr;
+  gap: var(--sys-space-4);
+}
+
+.market-intel-left-pane {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sys-space-3);
+}
+
+.index-quote-box {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.index-lbl {
+  font-size: 12px;
+  color: var(--theme-text-secondary);
+}
+
+.index-quote-price-row {
+  display: flex;
+  align-items: baseline;
+  gap: var(--sys-space-2);
+}
+
+.index-price {
+  font-size: 16px;
+  color: var(--theme-text-primary);
+}
+
+.index-change-val {
+  font-size: 10px;
+}
+
+.index-sparkline-svg {
+  height: 25px;
+  margin-top: var(--sys-space-1);
+}
+
+.index-regime-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 10px;
+}
+
+.index-regime-table td {
+  padding: var(--sys-space-1-5) 0;
+  border-bottom: 1px solid var(--theme-border-light);
+  color: var(--theme-text-secondary);
+}
+
+.index-regime-table tr:last-child td {
+  border-bottom: none;
+}
+
+.market-intel-right-pane {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sys-space-2);
+}
+
+.ai-summary-time-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.ai-summary-lbl {
+  font-size: 11px;
+  color: var(--theme-text-primary);
+}
+
+.ai-summary-time {
+  font-size: 9px;
+  color: var(--theme-text-muted);
+}
+
+.ai-summary-txt {
+  font-size: 11px;
+  color: var(--theme-text-secondary);
+  line-height: 1.4;
+  margin: 0;
+}
+
+.ai-bullets-list {
+  font-size: 10px;
+  color: var(--theme-text-secondary);
+  padding-left: var(--sys-space-4);
+  line-height: 1.5;
+  margin: 0;
+}
+
+.ai-view-more-btn {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--theme-color-ai);
+  cursor: pointer;
+  align-self: flex-start;
+  margin-top: var(--sys-space-2);
+  transition: all 0.2s ease;
+}
+
+.ai-view-more-btn:hover {
+  text-decoration: underline;
+}
+
+/* ── Suggested strategy subcomponents ───────────────────────────── */
+.suggested-strategy-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sys-space-2);
+}
+
+.suggest-lbl {
+  font-size: 9px;
+  color: var(--theme-text-muted);
+  text-transform: uppercase;
+}
+
+.suggest-header-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.suggest-strategy-name {
+  font-size: 14px;
+  color: var(--theme-text-primary);
+}
+
+.suggest-badge.neutral {
+  font-size: 8px;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: var(--sys-radius-sm);
+  background: rgba(168, 85, 247, 0.1);
+  color: var(--theme-color-neutral);
+  border: 1px solid rgba(168, 85, 247, 0.2);
+}
+
+.suggest-strategy-desc {
+  font-size: 11px;
+  color: var(--theme-text-secondary);
+  margin: 0;
+}
+
+.suggest-stats-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--sys-space-2);
+  margin-top: var(--sys-space-2);
+}
+
+.suggest-stat-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: var(--sys-space-2);
+  border: 1px solid var(--theme-border-light);
+  border-radius: var(--sys-radius-sm);
+  background: var(--theme-bg-surface-elevated);
+}
+
+.suggest-stat-lbl {
+  font-size: 9px;
+  color: var(--theme-text-muted);
+}
+
+.suggest-stat-val {
+  font-size: 11px;
+  color: var(--theme-text-primary);
+}
+
+.ai-generate-strategy-btn {
+  width: 100%;
+  margin-top: var(--sys-space-3);
+  padding: var(--sys-space-2) var(--sys-space-3);
+  font-size: 11px;
+  font-weight: 700;
+  color: white;
+  background: var(--theme-color-ai);
+  border-radius: var(--sys-radius-md);
+  cursor: pointer;
+  text-align: center;
+  transition: all 0.2s ease;
+}
+
+.ai-generate-strategy-btn:hover {
+  filter: brightness(1.15);
+}
+
+/* ── Recent Experiments table panel ─────────────────────────────── */
+.ailab-table-panel {
+  padding: var(--sys-space-3) var(--sys-space-4);
+  display: flex;
+  flex-direction: column;
+}
+
+.experiments-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11px;
+}
+
+.experiments-table th {
+  padding: var(--sys-space-3) var(--sys-space-2);
+  color: var(--theme-text-muted);
+  border-bottom: 1px solid var(--theme-border-light);
+  text-align: left;
+  font-weight: 600;
+}
+
+.experiments-table td {
+  padding: var(--sys-space-3) var(--sys-space-2);
+  border-bottom: 1px solid var(--theme-border-light);
+  color: var(--theme-text-secondary);
+  vertical-align: middle;
+}
+
+.experiments-table tr:hover td {
+  background-color: var(--theme-bg-surface-hover);
+}
+
+.status-pill {
+  font-size: 9px;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: var(--sys-radius-round);
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.status-pill.running {
+  background: rgba(16, 185, 129, 0.08);
+  color: var(--theme-color-up);
+  border: 1px solid rgba(16, 185, 129, 0.15);
+}
+
+.status-pill.running .status-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--theme-color-up);
+  animation: pulse-green 1.5s infinite;
+}
+
+.status-pill.completed {
+  background: var(--theme-bg-surface-elevated);
+  color: var(--theme-text-secondary);
+  border: 1px solid var(--theme-border-light);
+}
+
+.status-pill.completed .status-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--theme-text-muted);
+}
+
+.row-menu-btn {
+  border: none;
+  background: none;
+  color: var(--theme-text-muted);
+  cursor: pointer;
+}
+
+/* ── Sidebar widgets ────────────────────────────────────────────── */
+.sidebar-widget-cell {
+  padding: var(--sys-space-3) var(--sys-space-4);
+  border-bottom: 1px solid var(--theme-border-light);
+}
+
+.sidebar-widget-cell:last-child {
+  border-bottom: none;
+}
+
+.widget-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--sys-space-3);
+}
+
+.widget-title {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--theme-text-muted);
+}
+
+.widget-info-btn {
+  font-size: 11px;
+  color: var(--theme-text-muted);
+  cursor: pointer;
+}
+
+.ai-confidence-body {
+  display: flex;
+  align-items: center;
+  gap: var(--sys-space-4);
+}
+
+.circular-progress-box {
+  width: 85px;
+  height: 85px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.ai-confidence-lbl-box {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.confidence-summary {
+  font-size: 13px;
+  color: var(--theme-text-primary);
+}
+
+.confidence-sub {
+  font-size: 10px;
+  color: var(--theme-text-muted);
+}
+
+/* ── Trade Coach widget ─────────────────────────────────────────── */
+.trade-coach-review-box {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sys-space-2-5);
+}
+
+.coach-review-top-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.coach-review-lbl {
+  font-size: 11px;
+  color: var(--theme-text-secondary);
+}
+
+.coach-review-badge.loss {
+  font-size: 8px;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: var(--sys-radius-sm);
+  background: rgba(244, 63, 94, 0.1);
+  color: var(--theme-color-down);
+  border: 1px solid rgba(244, 63, 94, 0.2);
+  text-transform: uppercase;
+}
+
+.coach-trade-info {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid var(--theme-border-light);
+  padding-bottom: var(--sys-space-2);
+}
+
+.coach-trade-inst {
+  font-size: 12px;
+  color: var(--theme-text-primary);
+}
+
+.coach-trade-pnl {
+  font-size: 11px;
+}
+
+.coach-diagnostic-section {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.diag-title {
+  font-size: 9px;
+  color: var(--theme-text-muted);
+  text-transform: uppercase;
+}
+
+.diag-text {
+  font-size: 10.5px;
+  color: var(--theme-text-secondary);
+  line-height: 1.4;
+  margin: 0;
+}
+
+.coach-full-review-btn {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--theme-color-ai);
+  cursor: pointer;
+  align-self: flex-start;
+  margin-top: var(--sys-space-2);
+}
+
+/* ── Learning Insights widget ───────────────────────────────────── */
+.insights-filter-select {
+  background: var(--theme-bg-surface-elevated);
+  border: 1px solid var(--theme-border-light);
+  color: var(--theme-text-secondary);
+  font-size: 9px;
+  font-weight: 600;
+  border-radius: var(--sys-radius-sm);
+  padding: 2px 6px;
+}
+
+.learning-insights-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sys-space-3);
+}
+
+.learning-item-row {
+  display: grid;
+  grid-template-columns: 1.3fr 1fr;
+  gap: var(--sys-space-2);
+  font-size: 11px;
+  border-bottom: 1px solid var(--theme-border-light);
+  padding-bottom: var(--sys-space-2);
+}
+
+.learning-item-lbl {
+  color: var(--theme-text-muted);
+}
+
+.learning-item-val {
+  color: var(--theme-text-primary);
+}
+
+.learning-item-detail {
+  text-align: right;
+}
+
+.patience-progress-container {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: var(--sys-space-1);
+}
+
+.patience-lbl {
+  font-size: 10px;
+  color: var(--theme-text-muted);
+}
+
+.patience-val {
+  font-size: 10px;
+  color: var(--theme-text-primary);
+  text-align: right;
+}
+
+.patience-bar-track {
+  width: 100%;
+  height: 4px;
+  background: var(--theme-bg-active);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.patience-bar-fill {
+  height: 100%;
+  background: var(--theme-color-ai);
+  border-radius: 2px;
+}
+
+/* ── AI Experiments list widget ─────────────────────────────────── */
+.ai-view-all-sidebar-btn {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--theme-color-ai);
+  cursor: pointer;
+}
+
+.sidebar-experiments-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sys-space-2);
+}
+
+.sidebar-exp-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--sys-space-2) 0;
+  border-bottom: 1px solid var(--theme-border-light);
+}
+
+.sidebar-exp-row:last-child {
+  border-bottom: none;
+}
+
+.exp-row-left {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.exp-dot-bullet {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--theme-color-ai);
+}
+
+.exp-row-name {
+  font-size: 11px;
+  color: var(--theme-text-primary);
+}
+
+.exp-row-status {
+  font-size: 8px;
+  font-weight: 700;
+  padding: 1px 4px;
+  border-radius: var(--sys-radius-sm);
+}
+
+.exp-row-status.running {
+  color: var(--theme-color-up);
+  background: rgba(16, 185, 129, 0.08);
+}
+
+.exp-row-status.completed {
+  color: var(--theme-text-secondary);
+  background: var(--theme-bg-active);
+}
+
+/* ── Details Subviews (Fallback views) ───────────────────────────── */
+.ailab-details-subview {
+  padding: var(--sys-space-6);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sys-space-4);
+  overflow-y: auto;
+  height: 100%;
+}
+
+.subview-title {
+  font-family: var(--sys-font-display);
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--theme-text-primary);
+  margin: 0;
+}
+
+.subview-intro {
+  font-size: 12px;
+  color: var(--theme-text-secondary);
+  max-width: 600px;
+  line-height: 1.4;
+  margin: 0;
+}
+
+.subview-cards-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--sys-space-4);
+  margin-top: var(--sys-space-3);
+}
+
+.subview-metric-pane {
+  padding: var(--sys-space-4);
+  border: 1px solid var(--theme-border-light);
+  border-radius: var(--sys-radius-md);
+  background: var(--theme-bg-surface-elevated);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sys-space-2);
+}
+
+.subview-metric-pane.border-bottom {
+  border-bottom: 1px solid var(--theme-border-light);
+}
+
+.pane-lbl {
+  font-size: 10px;
+  text-transform: uppercase;
+  color: var(--theme-text-muted);
+}
+
+.pane-val {
+  font-size: 14px;
+  color: var(--theme-text-primary);
+}
+
+.pane-desc {
+  font-size: 11px;
+  color: var(--theme-text-secondary);
+  line-height: 1.4;
+  margin: 0;
+}
+
+.subview-back-btn {
+  margin-top: var(--sys-space-4);
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--theme-color-ai);
+  cursor: pointer;
+  align-self: flex-start;
+  transition: all 0.2s ease;
+}
+
+.subview-back-btn:hover {
+  text-decoration: underline;
+}
+
+.trade-coach-full-layout {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sys-space-4);
+  margin-top: var(--sys-space-2);
+}
+
+.experiments-ledger-box {
+  padding: var(--sys-space-4);
+  border: 1px solid var(--theme-border-light);
+  border-radius: var(--sys-radius-md);
+  background: var(--theme-bg-surface-elevated);
+  margin-top: var(--sys-space-3);
+}
+
+.ledger-idle-msg {
+  font-size: 11px;
+  color: var(--theme-text-secondary);
+}
+
+.ledger-running-progress {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sys-space-2);
+}
+
+.progress-lbl {
+  font-size: 11px;
+  color: var(--theme-text-primary);
+}
+
+.ledger-results-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sys-space-2);
+}
+
+.results-heading {
+  font-size: 13px;
+}

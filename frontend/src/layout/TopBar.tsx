@@ -2,7 +2,7 @@ import { createSignal, onCleanup } from 'solid-js';
 import type { Component } from 'solid-js';
 import { HugeIcon } from '../components/HugeIcon';
 import { Sun01Icon, Moon01Icon, ChevronDownIcon } from '@hugeicons/core-free-icons';
-import { store } from '../store/tradingStore';
+import { store, togglePaperTrade } from '../store/tradingStore';
 
 interface TopBarProps {
   theme: () => 'dark' | 'light';
@@ -117,6 +117,14 @@ export const TopBar: Component<TopBarProps> = (props) => {
       </div>
 
       <div class="topbar-right">
+        <button
+          class={`paper-mode-toggle ${store.paperTradeMode ? 'on' : ''}`}
+          onClick={togglePaperTrade}
+          title={store.paperTradeMode ? 'Switch to Live Trading' : 'Switch to Paper Trading'}
+        >
+          {store.paperTradeMode ? 'Paper' : 'Live'}
+        </button>
+
         <div class="portfolio-summary">
           <div class="summary-item">
             <span class="summary-label">Equity</span>

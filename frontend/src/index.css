@@ -239,3 +239,12 @@ select {
 .modal-content {
   border: var(--theme-card-border, none) !important;
 }
+
+/* Typographic Helper Classes */
+.font-semibold {
+  font-weight: 600;
+}
+.font-bold {
+  font-weight: 700;
+}
+

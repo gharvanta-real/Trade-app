@@ -8,7 +8,7 @@
   display: flex;
   flex-direction: column;
   height: 100%;
-  overflow-y: auto;
+  overflow: hidden;
   box-sizing: border-box;
   background-color: var(--theme-bg-surface);
 }
@@ -84,16 +84,21 @@
 
 /* Main Split Body */
 .orders-split-body {
-  display: grid;
-  grid-template-columns: 2.3fr 1fr;
-  gap: 0;
+  display: flex;
+  width: 100%;
+  overflow: hidden;
   align-items: stretch;
+  flex: 1;
+  min-height: 0;
 }
 
 .orders-left-col {
   display: flex;
   flex-direction: column;
   gap: 0;
+  flex: 1;
+  min-width: 0;
+  height: 100%;
 }
 
 .orders-panel-main {
@@ -103,6 +108,7 @@
   padding: var(--sys-space-4);
   box-sizing: border-box;
   border-bottom: 1px solid var(--theme-border-light);
+  flex-shrink: 0;
 }
 
 /* Tabs */
@@ -197,7 +203,11 @@
 
 /* Orders Table */
 .orders-table-wrapper {
-  overflow-x: auto;
+  overflow-y: auto;
+  height: 290px;
+  border: 1px solid var(--theme-border-light);
+  border-radius: var(--sys-radius-sm);
+  background-color: var(--theme-bg-surface);
 }
 
 .orders-table {
@@ -274,6 +284,8 @@
   grid-template-columns: repeat(3, 1fr);
   gap: 0;
   background: var(--theme-bg-surface);
+  flex: 1;
+  min-height: 0;
 }
 
 .summary-box-new {
@@ -282,6 +294,7 @@
   display: flex;
   flex-direction: column;
   border-right: 1px solid var(--theme-border-light);
+  flex: 1;
 }
 
 .summary-box-new:last-child {
@@ -292,6 +305,7 @@
   display: flex;
   flex-direction: column;
   gap: var(--sys-space-2);
+  flex: 1;
 }
 
 .activity-row {
@@ -349,6 +363,7 @@
   align-items: center;
   justify-content: space-around;
   gap: var(--sys-space-2);
+  flex: 1;
 }
 
 .exec-summary-canvas {
@@ -371,6 +386,7 @@
   display: flex;
   flex-direction: column;
   gap: var(--sys-space-2);
+  flex: 1;
 }
 
 .analytics-row {
@@ -391,11 +407,29 @@
 
 /* Right Column: Order Details Sidebar */
 .orders-right-sidebar {
+  width: 360px;
+  flex-shrink: 0;
   display: flex;
   flex-direction: column;
   height: 100%;
   background-color: var(--theme-bg-surface);
   border-left: 1px solid var(--theme-border-light);
+  overflow: hidden;
+  transition: width 0.3s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.3s cubic-bezier(0.16, 1, 0.3, 1), border-left-color 0.3s ease;
+}
+
+.orders-split-body.hide-panel .orders-right-sidebar {
+  width: 0;
+  opacity: 0;
+  border-left-color: transparent;
+  border-left-width: 0;
+  pointer-events: none;
+}
+
+.orders-split-body.show-panel .orders-right-sidebar {
+  width: 360px;
+  opacity: 1;
+  pointer-events: auto;
 }
 
 .order-details-panel, .details-placeholder {
@@ -405,6 +439,7 @@
   flex-direction: column;
   height: 100%;
   box-sizing: border-box;
+  overflow-y: auto;
 }
 
 .details-header {

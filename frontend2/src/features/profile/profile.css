@@ -1,0 +1,134 @@
+/* ==========================================
+   PROFILE PAGE STYLES
+   ========================================== */
+
+@import "../charting/workspace.css";
+
+.profile-page-layout {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+  box-sizing: border-box;
+  background-color: var(--theme-bg-surface);
+}
+
+.profile-title-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--sys-space-3) var(--sys-space-4);
+  border-bottom: 1px solid var(--theme-border-light);
+  background: var(--theme-bg-surface);
+}
+
+.profile-title-left {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.profile-title-text {
+  font-family: var(--sys-font-display);
+  font-weight: 700;
+  font-size: 18px;
+  color: var(--theme-text-primary);
+  margin: 0;
+}
+
+.profile-sub-text {
+  font-size: 11px;
+  color: var(--theme-text-muted);
+  margin: 0;
+}
+
+.profile-panel-main {
+  background: var(--theme-bg-surface);
+  border: none;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  overflow: hidden;
+}
+
+.profile-grid {
+  display: grid;
+  grid-template-columns: 180px 1fr;
+  height: 100%;
+  gap: 0;
+  box-sizing: border-box;
+  overflow: hidden;
+}
+
+.profile-nav {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sys-space-1);
+  padding: var(--sys-space-4);
+  border-right: 1px solid var(--theme-border-light);
+  background-color: var(--theme-bg-surface);
+}
+
+.profile-nav-item {
+  width: 100%;
+  height: 34px;
+  padding: 0 var(--sys-space-4);
+  text-align: left;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--theme-text-secondary);
+  border-radius: var(--sys-radius-sm);
+  transition: all 0.15s ease;
+}
+
+.profile-nav-item:hover {
+  background-color: var(--theme-bg-surface-hover);
+  color: var(--theme-text-primary);
+}
+
+.profile-nav-item.active {
+  background-color: var(--theme-bg-active);
+  color: var(--theme-text-primary);
+  font-weight: 600;
+}
+
+.profile-main {
+  padding: var(--sys-space-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sys-space-5);
+  overflow-y: auto;
+  background-color: var(--theme-bg-surface);
+}
+
+.profile-user-card {
+  display: flex;
+  align-items: center;
+  gap: var(--sys-space-4);
+}
+
+.profile-lg-avatar {
+  width: 50px;
+  height: 50px;
+  border-radius: var(--sys-radius-round);
+  background-color: var(--theme-bg-active);
+  border: 2px solid var(--theme-border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  font-weight: 700;
+  font-family: var(--sys-font-display);
+}
+
+.profile-user-details {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sys-space-1);
+}
+
+.profile-user-name {
+  font-family: var(--sys-font-display);
+  font-weight: 700;
+  font-size: 16px;
+}

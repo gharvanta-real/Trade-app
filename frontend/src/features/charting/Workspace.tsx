@@ -11,8 +11,12 @@ import {
   PenToolIcon, 
   RulerIcon
 } from '@hugeicons/core-free-icons';
-import { store, placeOrder, closePosition, addWatchlistItem } from '../../store/tradingStore';
+import { store, placeOrder, closePosition, addWatchlistItem, addNotification, placeRealOrder } from '../../store/tradingStore';
 import './workspace.css';
+
+const SIDECAR = 'http://localhost:8001/api/kotak';
+
+interface MiniChainRow { strike: number; call: { ltp: number; oi: number; iv: number }; put: { ltp: number; oi: number; iv: number }; isAtm: boolean; }
 
 interface WorkspaceProps {
   theme: () => 'dark' | 'light';
@@ -29,6 +33,9 @@ interface Candle {
 export const Workspace: Component<WorkspaceProps> = (props) => {
   // 1. STATE MANAGEMENT
   const [activeWatchlistTab, setActiveWatchlistTab] = createSignal('Index');
+  const [activeWlPanel, setActiveWlPanel] = createSignal<'WL1'|'WL2'>('WL1');
+  const [wl2Items, setWl2Items] = createSignal<string[]>(['HDFCBANK', 'RELIANCE', 'INFY', 'TCS', 'AXISBANK']);
+  const [wl2Search, setWl2Search] = createSignal('');
   const [activeOrderMode, setActiveOrderMode] = createSignal('Buy');
   const [orderType, setOrderType] = createSignal('Market');
   const [productType, setProductType] = createSignal('MIS');
@@ -38,6 +45,61 @@ export const Workspace: Component<WorkspaceProps> = (props) => {
   const [activeSymbol, setActiveSymbol] = createSignal('BTCUSDT');
   const [activeChartTab, setActiveChartTab] = createSignal('Chart 1');
   const [searchQuery, setSearchQuery] = createSignal('');
+
+  // ── Option Chain mini-panel state ──────────────────────────────────────
+  const [showOcPanel, setShowOcPanel] = createSignal(false);
+  const [ocSymbol, setOcSymbol] = createSignal('');
+  const [ocExpiry, setOcExpiry] = createSignal('');
+  const [ocExpiries, setOcExpiries] = createSignal<string[]>([]);
+  const [ocRows, setOcRows] = createSignal<MiniChainRow[]>([]);
+  const [ocSpot, setOcSpot] = createSignal(0);
+  const [ocAtm, setOcAtm] = createSignal(0);
+  const [ocLot, setOcLot] = createSignal(50);
+  const [ocLoading, setOcLoading] = createSignal(false);
+
+  async function openOcPanel(sym: string) {
+    const cleanSym = sym.replace(/USDT$/, '').toUpperCase();
+    setOcSymbol(cleanSym);
+    setShowOcPanel(true);
+    setOcLoading(true);
+    setOcRows([]);
+    try {
+      // 1. Load expiries
+      const exRes = await fetch(`${SIDECAR}/option-chain/expiries?underlying=${encodeURIComponent(cleanSym)}`);
+      const exList: string[] = await exRes.json();
+      setOcExpiries(exList);
+      const exp = exList[0] || nearestThursday();
+      setOcExpiry(exp);
+      // 2. Load chain
+      const spotVal = store.symbols[sym]?.price || 0;
+      const cRes = await fetch(`${SIDECAR}/option-chain/chain?underlying=${encodeURIComponent(cleanSym)}&expiry=${encodeURIComponent(exp)}&spot=${spotVal}`);
+      const cData = await cRes.json();
+      setOcRows(cData.rows || []);
+      setOcSpot(cData.spot || 0);
+      setOcAtm(cData.atm || 0);
+      setOcLot(cData.lotSize || 50);
+    } catch { /* offline — show empty state */ }
+    finally { setOcLoading(false); }
+  }
+
+  async function switchOcExpiry(exp: string) {
+    setOcExpiry(exp);
+    setOcLoading(true);
+    try {
+      const cRes = await fetch(`${SIDECAR}/option-chain/chain?underlying=${encodeURIComponent(ocSymbol())}&expiry=${encodeURIComponent(exp)}&spot=${ocSpot()}`);
+      const cData = await cRes.json();
+      setOcRows(cData.rows || []);
+      setOcAtm(cData.atm || 0);
+    } catch { }
+    finally { setOcLoading(false); }
+  }
+
+  function nearestThursday(): string {
+    const d = new Date();
+    const days = (4 - d.getDay() + 7) % 7 || 7;
+    d.setDate(d.getDate() + days);
+    return d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }).toUpperCase();
+  }
   
   // Auto-adjust parameters when selected active symbol changes
   createEffect(() => {
@@ -158,6 +220,7 @@ export const Workspace: Component<WorkspaceProps> = (props) => {
   };
 
   // 2. CANVAS CHART GENERATOR
+  const [candles, setCandles] = createSignal<Candle[]>([]);
   let canvasRef!: HTMLCanvasElement;
   let canvasContainerRef!: HTMLDivElement;
   let animationFrameId: number;
@@ -194,8 +257,7 @@ export const Workspace: Component<WorkspaceProps> = (props) => {
     const plotWidth = width - paddingRight;
     const plotHeight = height - paddingBottom;
 
-    // Generate 45 candles
-    const candlesList = generateCandles(45);
+    const candlesList = candles();
     if (candlesList.length === 0) return;
 
     const prices = candlesList.flatMap(c => [c.low, c.high]);
@@ -312,10 +374,39 @@ export const Workspace: Component<WorkspaceProps> = (props) => {
     });
   });
 
+  // Reset base candles when activeSymbol changes
+  createEffect(() => {
+    activeSymbol();
+    setCandles(generateCandles(45));
+  });
+
+  // Update last candle in real-time on live price ticks
+  createEffect(() => {
+    const sym = activeSymbol();
+    const livePrice = store.symbols[sym]?.price;
+    if (!livePrice || livePrice === 0) return;
+
+    const list = candles();
+    if (list.length === 0) return;
+
+    const last = list[list.length - 1];
+    if (last.close !== livePrice || livePrice > last.high || livePrice < last.low) {
+      const updated = [...list];
+      const newLast = { ...last };
+      newLast.close = livePrice;
+      newLast.high = Math.max(newLast.high, livePrice);
+      newLast.low = Math.min(newLast.low, livePrice);
+      newLast.isGreen = newLast.close >= newLast.open;
+      updated[updated.length - 1] = newLast;
+      setCandles(updated);
+    }
+  });
+
+  // Redraw when theme, symbol, or candle list changes
   createEffect(() => {
     props.theme();
     activeSymbol();
-    store.symbols[activeSymbol()]?.price; // subscribe to live price ticks
+    candles();
     handleResize();
   });
 
@@ -344,64 +435,177 @@ export const Workspace: Component<WorkspaceProps> = (props) => {
   };
 
   return (
-    <div class="workspace-grid" style={{ height: "100%", overflow: "hidden" }}>
-      {/* 1. LEFT COLUMN: WATCHLIST */}
-      <div class="panel watchlist-panel" style={{ display: "flex", "flex-direction": "column" }}>
-        <div class="panel-header">
-          <span style={{ "font-family": "var(--sys-font-display)", "font-weight": "600" }}>Watchlist</span>
-        </div>
-        <div class="search-container">
-          <div class="search-input-wrapper">
-            <HugeIcon icon={Search01Icon} size={12} class="search-icon" />
-            <input 
-              type="text" 
-              placeholder="Search Watchlist..." 
-              value={searchQuery()}
-              onInput={(e) => setSearchQuery(e.currentTarget.value)}
-            />
+    <div class="workspace-grid" style={{ height: "100%", overflow: "hidden", position: "relative" }}>
+      {/* ── Option Chain Mini-Panel (slide-in from right) ────────────────── */}
+      <Show when={showOcPanel()}>
+        <div class="oc-mini-overlay" onClick={() => setShowOcPanel(false)} />
+        <div class="oc-mini-panel">
+          {/* Header */}
+          <div class="oc-mini-header">
+            <div>
+              <span class="oc-mini-title">{ocSymbol()} Option Chain</span>
+              <span class="oc-mini-spot">Spot ₹{ocSpot().toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+              <Show when={ocAtm() > 0}>
+                <span class="oc-mini-spot">ATM {ocAtm().toLocaleString('en-IN')}</span>
+              </Show>
+            </div>
+            <button class="oc-mini-close" onClick={() => setShowOcPanel(false)}>✕</button>
+          </div>
+
+          {/* Expiry selector */}
+          <div class="oc-mini-toolbar">
+            <span class="oc-mini-label">Expiry</span>
+            <select class="oc-mini-select" value={ocExpiry()} onChange={e => switchOcExpiry(e.currentTarget.value)}>
+              <For each={ocExpiries()}>{ex => <option value={ex}>{ex}</option>}</For>
+            </select>
+            <span class="oc-mini-lot">Lot: {ocLot()}</span>
+            <a href="#/optionchain" class="oc-mini-fulllink" onClick={() => setShowOcPanel(false)}>Full OC →</a>
+          </div>
+
+          {/* Chain table */}
+          <div class="oc-mini-body">
+            <Show when={ocLoading()}>
+              <div class="oc-mini-loading"><div class="oc-mini-spinner" />Loading…</div>
+            </Show>
+            <Show when={!ocLoading() && ocRows().length > 0}>
+              <table class="oc-mini-table">
+                <thead>
+                  <tr>
+                    <th>CE LTP</th><th>CE OI</th>
+                    <th class="oc-mini-strike-col">Strike</th>
+                    <th>PE OI</th><th>PE LTP</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <For each={ocRows().slice(5, 16)}>
+                    {row => (
+                      <tr class={row.isAtm ? 'oc-mini-atm' : ''}>
+                        <td class="up">{row.call.ltp.toFixed(1)}</td>
+                        <td class="muted">{(row.call.oi/1000).toFixed(0)}K</td>
+                        <td class="oc-mini-strike-col">
+                          {row.strike.toLocaleString('en-IN')}
+                          <Show when={row.isAtm}><span class="oc-mini-atm-tag">ATM</span></Show>
+                        </td>
+                        <td class="muted">{(row.put.oi/1000).toFixed(0)}K</td>
+                        <td class="down">{row.put.ltp.toFixed(1)}</td>
+                      </tr>
+                    )}
+                  </For>
+                </tbody>
+              </table>
+            </Show>
+            <Show when={!ocLoading() && ocRows().length === 0}>
+              <p class="oc-mini-empty">No data. Ensure backend is connected.</p>
+            </Show>
+          </div>
+
+          {/* Quick actions */}
+          <div class="oc-mini-actions">
+            <Show when={ocRows().find(r => r.isAtm)}>
+              <button class="oc-mini-action-btn buy" onClick={async () => {
+                const atmRow = ocRows().find(r => r.isAtm);
+                if (!atmRow) return;
+                const r = await placeRealOrder({ inst: `${ocSymbol()} ${ocExpiry()} ${atmRow.strike} CE`, side: 'Buy', type: 'Market', qty: ocLot(), price: atmRow.call.ltp, prod: 'NRML', exchange: 'nse_fo' });
+                addNotification(r.success ? 'Bought ATM CE' : 'Order Failed', r.message, r.success ? 'success' : 'error', 'orders');
+              }}>Buy ATM CE</button>
+              <button class="oc-mini-action-btn sell" onClick={async () => {
+                const atmRow = ocRows().find(r => r.isAtm);
+                if (!atmRow) return;
+                const r = await placeRealOrder({ inst: `${ocSymbol()} ${ocExpiry()} ${atmRow.strike} PE`, side: 'Sell', type: 'Market', qty: ocLot(), price: atmRow.put.ltp, prod: 'NRML', exchange: 'nse_fo' });
+                addNotification(r.success ? 'Sold ATM PE' : 'Order Failed', r.message, r.success ? 'success' : 'error', 'orders');
+              }}>Sell ATM PE</button>
+            </Show>
           </div>
         </div>
-        <div class="watchlist-tabs">
-          <For each={['Index', 'Stocks', 'Options']}>
-            {(tab) => (
-              <button 
-                class={`wl-tab ${activeWatchlistTab() === tab ? 'active' : ''}`}
-                onClick={() => setActiveWatchlistTab(tab)}
-              >
-                {tab === 'Index' ? 'Crypto' : tab === 'Stocks' ? 'DeFi' : 'Altcoins'}
-              </button>
-            )}
-          </For>
+      </Show>
+
+      {/* 1. LEFT COLUMN: WATCHLIST */}
+      <div class="panel watchlist-panel" style={{ display: "flex", "flex-direction": "column" }}>
+        {/* WL1 / WL2 switcher */}
+        <div class="wl-panel-switcher">
+          <button class={`wl-panel-tab ${activeWlPanel() === 'WL1' ? 'active' : ''}`} onClick={() => setActiveWlPanel('WL1')}>Watchlist 1</button>
+          <button class={`wl-panel-tab ${activeWlPanel() === 'WL2' ? 'active' : ''}`} onClick={() => setActiveWlPanel('WL2')}>Watchlist 2</button>
         </div>
-        <div class="watchlist-items" style={{ flex: 1, overflow: "auto" }}>
-          <For each={watchlistItems()}>
-            {(item) => (
-              <div 
-                class={`wl-item ${activeSymbol() === item.key ? 'active' : ''}`}
-                onClick={() => setActiveSymbol(item.key)}
-              >
-                <div class="wl-item-left">
-                  <span class="wl-item-name">{item.name}</span>
-                  <span class="wl-item-desc">BINANCE LIVE</span>
+
+        {/* ── WATCHLIST 1 ── */}
+        <Show when={activeWlPanel() === 'WL1'}>
+          <div class="search-container">
+            <div class="search-input-wrapper">
+              <HugeIcon icon={Search01Icon} size={12} class="search-icon" />
+              <input type="text" placeholder="Search Watchlist..." value={searchQuery()} onInput={(e) => setSearchQuery(e.currentTarget.value)} />
+            </div>
+          </div>
+          <div class="watchlist-tabs">
+            <For each={['Index', 'Stocks', 'Options']}>
+              {(tab) => (
+                <button class={`wl-tab ${activeWatchlistTab() === tab ? 'active' : ''}`} onClick={() => setActiveWatchlistTab(tab)}>
+                  {tab === 'Index' ? 'Crypto' : tab === 'Stocks' ? 'DeFi' : 'Altcoins'}
+                </button>
+              )}
+            </For>
+          </div>
+          <div class="watchlist-items" style={{ flex: 1, overflow: "auto" }}>
+            <For each={watchlistItems()}>
+              {(item) => (
+                <div class={`wl-item ${activeSymbol() === item.key ? 'active' : ''}`} onClick={() => setActiveSymbol(item.key)}>
+                  <div class="wl-item-left">
+                    <span class="wl-item-name">{item.name}</span>
+                    <span class="wl-item-desc">BINANCE LIVE</span>
+                  </div>
+                  <div class="wl-item-right" style={{ "text-align": "right" }}>
+                    <span class="wl-item-price" style={{ "font-family": "var(--sys-font-mono)" }}>${item.price.toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>
+                    <span class={`wl-item-change ${item.up ? 'up' : 'down'}`} style={{ "font-family": "var(--sys-font-mono)" }}>{item.up ? '+' : ''}{item.pct.toFixed(2)}%</span>
+                  </div>
                 </div>
-                <div class="wl-item-right" style={{ "text-align": "right" }}>
-                  <span class="wl-item-price" style={{ "font-family": "var(--sys-font-mono)" }}>
-                    ${item.price.toLocaleString('en-US', { minimumFractionDigits: 2 })}
-                  </span>
-                  <span class={`wl-item-change ${item.up ? 'up' : 'down'}`} style={{ "font-family": "var(--sys-font-mono)" }}>
-                    {item.up ? '+' : ''}{item.pct.toFixed(2)}%
-                  </span>
-                </div>
-              </div>
-            )}
-          </For>
-        </div>
-        <div class="wl-page-action-bar" style={{ padding: "var(--sys-space-2) var(--sys-space-3)" }}>
-          <button class="wl-add-btn" onClick={handleAddWatchlist} style={{ width: "100%", "justify-content": "center" }}>
-            <HugeIcon icon={Add01Icon} size={12} />
-            <span>Add Symbol</span>
-          </button>
-        </div>
+              )}
+            </For>
+          </div>
+          <div class="wl-page-action-bar" style={{ padding: "var(--sys-space-2) var(--sys-space-3)" }}>
+            <button class="wl-add-btn" onClick={handleAddWatchlist} style={{ width: "100%", "justify-content": "center" }}>
+              <HugeIcon icon={Add01Icon} size={12} /><span>Add Symbol</span>
+            </button>
+          </div>
+        </Show>
+
+        {/* ── WATCHLIST 2 ── */}
+        <Show when={activeWlPanel() === 'WL2'}>
+          <div class="search-container">
+            <div class="search-input-wrapper">
+              <HugeIcon icon={Search01Icon} size={12} class="search-icon" />
+              <input type="text" placeholder="Search WL2..." value={wl2Search()} onInput={e => setWl2Search(e.currentTarget.value)} />
+            </div>
+          </div>
+          <div class="watchlist-items" style={{ flex: 1, overflow: "auto" }}>
+            <For each={wl2Items().filter(k => k.toLowerCase().includes(wl2Search().toLowerCase()))}>
+              {(key) => {
+                const sym = store.symbols[key];
+                return (
+                  <div class={`wl-item ${activeSymbol() === key ? 'active' : ''}`} onClick={() => setActiveSymbol(key)}>
+                    <div class="wl-item-left">
+                      <span class="wl-item-name">{sym?.name || key}</span>
+                      <span class="wl-item-desc wl2-badge">WL2 • NSE</span>
+                    </div>
+                    <div class="wl-item-right" style={{ "text-align": "right" }}>
+                      <Show when={sym}>
+                        <span class="wl-item-price" style={{ "font-family": "var(--sys-font-mono)" }}>₹{(sym?.price || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                        <span class={`wl-item-change ${sym?.up ? 'up' : 'down'}`} style={{ "font-family": "var(--sys-font-mono)" }}>{sym?.up ? '+' : ''}{(sym?.pct || 0).toFixed(2)}%</span>
+                      </Show>
+                      <Show when={!sym}><span class="wl-item-change">—</span></Show>
+                    </div>
+                  </div>
+                );
+              }}
+            </For>
+          </div>
+          <div class="wl-page-action-bar" style={{ padding: "var(--sys-space-2) var(--sys-space-3)" }}>
+            <button class="wl-add-btn" onClick={() => {
+              const q = prompt('Add symbol to Watchlist 2 (e.g. SBIN):');
+              if (q) setWl2Items(w => [...w, q.toUpperCase()]);
+            }} style={{ width: "100%", "justify-content": "center" }}>
+              <HugeIcon icon={Add01Icon} size={12} /><span>Add to WL2</span>
+            </button>
+          </div>
+        </Show>
       </div>
 
       {/* 2. CENTER COLUMN: CHART & POSITIONS */}
@@ -465,12 +669,22 @@ export const Workspace: Component<WorkspaceProps> = (props) => {
 
               {/* Floating Quick Action Overlay */}
               <div class="chart-float-actions">
+                <button class="float-action-btn oc-btn" title="Open Option Chain for this symbol" onClick={() => openOcPanel(activeSymbol())}>
+                  OC
+                </button>
                 <button class="float-action-btn sell" onClick={() => handlePlaceOrder('Sell')}>
                   SELL
                 </button>
                 <input type="number" class="float-qty-input font-mono" style={{ width: "60px", padding: "0 4px" }} value={qty()} onInput={(e) => setQty(Number(e.currentTarget.value))} />
                 <button class="float-action-btn buy" onClick={() => handlePlaceOrder('Buy')}>
                   BUY
+                </button>
+              </div>
+
+              {/* OC quick-access button in chart top-right corner */}
+              <div class="chart-oc-corner-btn">
+                <button onClick={() => openOcPanel(activeSymbol())}>
+                  📊 Option Chain
                 </button>
               </div>
             </div>

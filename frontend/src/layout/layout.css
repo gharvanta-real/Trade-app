@@ -133,6 +133,26 @@
   gap: var(--sys-space-4);
 }
 
+.paper-mode-toggle {
+  height: 28px;
+  min-width: 68px;
+  padding: 0 12px;
+  border-radius: var(--sys-radius-round);
+  border: 1px solid var(--theme-color-down);
+  background-color: var(--theme-color-down-bg);
+  color: var(--theme-color-down);
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.paper-mode-toggle.on {
+  border-color: var(--theme-color-neutral);
+  background-color: var(--theme-color-neutral-bg);
+  color: var(--theme-color-neutral);
+}
+
 .portfolio-summary {
   display: flex;
   align-items: center;
@@ -477,4 +497,3 @@
   align-self: flex-end;
   margin-top: 2px;
 }
-

@@ -11,6 +11,14 @@ export const PositionsPage: Component = () => {
   const [orderModalSym, setOrderModalSym] = createSignal('');
   const [orderModalSide, setOrderModalSide] = createSignal<'Buy' | 'Sell'>('Buy');
   const [squaringOff, setSquaringOff] = createSignal<string | null>(null);
+  
+  // Track selected position for the dynamic right panel
+  const [selectedKey, setSelectedKey] = createSignal<string | null>(null);
+  const selectedPosition = () => {
+    const key = selectedKey();
+    if (!key) return null;
+    return getPositions().find(p => p.inst === key) || null;
+  };
 
   const openAddPosition = (inst: string, side: 'Buy' | 'Sell') => {
     setOrderModalSym(inst);
@@ -24,11 +32,7 @@ export const PositionsPage: Component = () => {
     setSquaringOff(null);
   };
 
-  const squareOffAll = async () => {
-    for (const pos of store.positions) {
-      if (pos.qty !== 0) await squareOffRealPosition(pos);
-    }
-  };
+
 
   // Canvas refs for charts
   let trendCanvasRef!: HTMLCanvasElement;
@@ -393,7 +397,7 @@ export const PositionsPage: Component = () => {
       </div>
 
       {/* Main Grid Area Split */}
-      <div class="pos-split-body">
+      <div class={`pos-split-body ${selectedKey() ? 'show-panel' : 'hide-panel'}`}>
         {/* Left Column (Table & Trend Chart) */}
         <div class="pos-left-col">
           <div class="pos-panel-main">
@@ -454,8 +458,13 @@ export const PositionsPage: Component = () => {
                       const sym = store.symbols[pos.inst];
                       const changeVal = sym ? sym.change : (pos.ltp - pos.avg);
                       
+                      const isSelected = () => selectedKey() === pos.inst;
                       return (
-                        <tr>
+                        <tr
+                          class={isSelected() ? 'active-row' : ''}
+                          onClick={() => setSelectedKey(pos.inst)}
+                          style={{ cursor: 'pointer' }}
+                        >
                           <td>
                             <div class="pos-inst-box">
                               <span class="pos-inst-name font-bold">{pos.inst}</span>
@@ -493,14 +502,14 @@ export const PositionsPage: Component = () => {
                                 class="exit-pos-btn"
                                 title="Square Off Position"
                                 disabled={squaringOff() === pos.inst}
-                                onClick={() => handleSquareOff(pos)}
+                                onClick={(e) => { e.stopPropagation(); handleSquareOff(pos); }}
                                 style={{ opacity: squaringOff() === pos.inst ? 0.5 : 1 }}
                               >
                                 {squaringOff() === pos.inst ? '...' : 'Exit'}
                               </button>
                               <button
                                 title="Add to position"
-                                onClick={() => openAddPosition(pos.inst, pos.qty > 0 ? 'Buy' : 'Sell')}
+                                onClick={(e) => { e.stopPropagation(); openAddPosition(pos.inst, pos.qty > 0 ? 'Buy' : 'Sell'); }}
                                 style={{ background: 'var(--theme-color-neutral-bg)', color: 'var(--theme-color-neutral)', border: '1px solid var(--theme-color-neutral)', padding: '4px 8px', 'border-radius': '6px', 'font-size': '10px', 'font-weight': '700' }}
                               >+Add</button>
                             </div>
@@ -555,118 +564,177 @@ export const PositionsPage: Component = () => {
 
         {/* Right Column (Sidebar) */}
         <div class="pos-right-col">
-          {/* Position Summary Donut */}
-          <div class="summary-box-pos">
-            <div class="panel-header-new">
-              <span class="panel-title-new">Position Summary</span>
-            </div>
-            <div class="position-donut-body">
-              <canvas ref={summaryCanvasRef} class="summary-donut-canvas"></canvas>
-              <div class="donut-legend-pos">
-                <div class="legend-row-pos">
-                  <span class="legend-dot indigo"></span>
-                  <div class="lbl-box">
-                    <span class="lbl-pos">Long ({summaryMetrics().longCount})</span>
-                    <span class="val-pos font-mono">{formatINR(summaryMetrics().longVal)}</span>
-                  </div>
-                </div>
-                <div class="legend-row-pos">
-                  <span class="legend-dot red"></span>
-                  <div class="lbl-box">
-                    <span class="lbl-pos">Short ({summaryMetrics().shortCount})</span>
-                    <span class="val-pos font-mono">{formatINR(summaryMetrics().shortVal)}</span>
-                  </div>
-                </div>
-                <div class="legend-row-pos line-top">
-                  <span class="legend-dot blue"></span>
-                  <div class="lbl-box">
-                    <span class="lbl-pos">Net Exposure</span>
-                    <span class="val-pos font-mono">{formatINR(Math.abs(summaryMetrics().netExposure))}</span>
-                  </div>
-                </div>
-                <div class="legend-row-pos font-bold">
-                  <span class="legend-dot gray"></span>
-                  <div class="lbl-box">
-                    <span>Total</span>
-                    <span class="font-mono">{formatINR(summaryMetrics().total)}</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
+          <Show when={selectedPosition()}>
+            {(pos) => {
+              // Generate pseudo-random sparkline path for selected position
+              const getSelectedChartPath = (instName: string) => {
+                let hash = 0;
+                for (let i = 0; i < instName.length; i++) {
+                  hash = instName.charCodeAt(i) + ((hash << 5) - hash);
+                }
+                const points = [];
+                const step = 220 / 19;
+                for (let i = 0; i < 20; i++) {
+                  const val = Math.abs(Math.sin(hash + i) * 30);
+                  points.push(70 - val);
+                }
+                let path = `M 0,${points[0]}`;
+                for (let i = 0; i < points.length - 1; i++) {
+                  const x1 = step * i;
+                  const y1 = points[i];
+                  const x2 = step * (i + 1);
+                  const y2 = points[i + 1];
+                  const xc = (x1 + x2) / 2;
+                  const yc = (y1 + y2) / 2;
+                  path += ` Q ${x1},${y1} ${xc},${yc}`;
+                }
+                path += ` L 220,${points[points.length - 1]}`;
+                return path;
+              };
 
-          {/* Risk & Greeks (Net) */}
-          <div class="summary-box-pos">
-            <div class="panel-header-new">
-              <span class="panel-title-new">Risk & Greeks (Net)</span>
-            </div>
-            <div class="greeks-table-wrapper">
-              <table class="greeks-table">
-                <thead>
-                  <tr>
-                    <th>Greeks</th>
-                    <th>Value</th>
-                    <th>Change</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr>
-                    <td>Delta</td>
-                    <td class="font-mono font-semibold">+0.32</td>
-                    <td class="font-mono up">+0.04</td>
-                  </tr>
-                  <tr>
-                    <td>Gamma</td>
-                    <td class="font-mono font-semibold">+0.05</td>
-                    <td class="font-mono up">+0.01</td>
-                  </tr>
-                  <tr>
-                    <td>Theta</td>
-                    <td class="font-mono font-semibold">-1,245.50</td>
-                    <td class="font-mono down">-48.20</td>
-                  </tr>
-                  <tr>
-                    <td>Vega</td>
-                    <td class="font-mono font-semibold">+2,350.75</td>
-                    <td class="font-mono up">+120.30</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-          </div>
+              // Retrieve matching symbol info if available
+              const sym = () => store.symbols[pos().inst];
+              const price = () => sym()?.price || pos().ltp;
+              const change = () => sym()?.change || (pos().ltp - pos().avg);
+              const pct = () => sym()?.pct || pos().pct;
+              const up = () => sym() ? (sym().up ?? true) : (pos().pnl >= 0);
+              const value = () => pos().ltp * Math.abs(pos().qty);
 
-          {/* Actions panel */}
-          <div class="summary-box-pos">
-            <div class="panel-header-new">
-              <span class="panel-title-new">Actions</span>
-            </div>
-            <div class="actions-pos-list">
-              <button class="pos-act-btn square-off-all" onClick={squareOffAll}>
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="margin-right: 6px; display: inline-block; vertical-align: middle;">
-                  <rect x="5" y="5" width="14" height="14" rx="2" fill="none"/>
-                </svg>
-                Square Off All
-              </button>
-              <button class="pos-act-btn hedge" onClick={() => openAddPosition('NIFTY 50', 'Buy')}>
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="margin-right: 6px; display: inline-block; vertical-align: middle;">
-                  <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
-                </svg>
-                Add Hedge
-              </button>
-              <button class="pos-act-btn convert">
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="margin-right: 6px; display: inline-block; vertical-align: middle;">
-                  <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>
-                </svg>
-                P&amp;L Analysis
-              </button>
-              <button class="pos-act-btn export">
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="margin-right: 6px; display: inline-block; vertical-align: middle;">
-                  <path d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1M16 8l-4-4M12 4v12M12 4L8 8"/>
-                </svg>
-                Export CSV
-              </button>
-            </div>
-          </div>
+              return (
+                <div class="pos-details-panel">
+                  {/* Header Row */}
+                  <div class="detail-header-row">
+                    <div class="detail-title-box">
+                      <h2 class="detail-title-main">{pos().inst}</h2>
+                      <span class="detail-exchange-lbl">{pos().prod || 'MIS'} &bull; {pos().qty >= 0 ? 'BUY' : 'SELL'}</span>
+                    </div>
+                    <div class="detail-header-actions">
+                      <button class="detail-close-btn" onClick={() => setSelectedKey(null)}>&times;</button>
+                    </div>
+                  </div>
+
+                  {/* Price Summary Row */}
+                  <div class="detail-price-row">
+                    <span class="detail-ltp-val">₹{price().toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                    <span class={`detail-change-badge ${up() ? 'up' : 'down'}`}>
+                      {change() >= 0 ? '+' : ''}{change().toFixed(2)} ({pct() >= 0 ? '+' : ''}{pct().toFixed(2)}%)
+                    </span>
+                  </div>
+
+                  <div class="detail-market-state">
+                    <span class="state-dot live"></span>
+                    <span class="state-text">Live Position P&amp;L</span>
+                    <span class={`font-mono font-bold ${pos().pnl >= 0 ? 'up' : 'down'}`} style={{ 'margin-left': 'auto', 'font-size': '12px' }}>
+                      {pos().pnl >= 0 ? '+' : ''}{pos().pnl.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                    </span>
+                  </div>
+
+                  {/* Bid/Ask Quotes */}
+                  <div class="bid-ask-box">
+                    <div class="quote-side buy">
+                      <div class="quote-header">
+                        <span>Bid</span>
+                        <span class="font-mono">₹{(price() - 0.05).toFixed(2)}</span>
+                      </div>
+                      <div class="quote-bar-wrapper">
+                        <div class="quote-bar" style={{ width: "60%" }}></div>
+                      </div>
+                    </div>
+                    <div class="quote-side sell">
+                      <div class="quote-header">
+                        <span>Ask</span>
+                        <span class="font-mono">₹{(price() + 0.05).toFixed(2)}</span>
+                      </div>
+                      <div class="quote-bar-wrapper">
+                        <div class="quote-bar" style={{ width: "40%" }}></div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Position Details List */}
+                  <div class="detail-metrics-grid">
+                    <div class="metric-card">
+                      <span class="metric-lbl">Avg. Cost</span>
+                      <span class="metric-val font-mono">₹{pos().avg.toFixed(2)}</span>
+                    </div>
+                    <div class="metric-card">
+                      <span class="metric-lbl">LTP</span>
+                      <span class="metric-val font-mono">₹{pos().ltp.toFixed(2)}</span>
+                    </div>
+                    <div class="metric-card">
+                      <span class="metric-lbl">Quantity</span>
+                      <span class="metric-val font-mono">{pos().qty}</span>
+                    </div>
+                    <div class="metric-card">
+                      <span class="metric-lbl">Value</span>
+                      <span class="metric-val font-mono">₹{value().toLocaleString('en-IN', { maximumFractionDigits: 2 })}</span>
+                    </div>
+                    <div class="metric-card">
+                      <span class="metric-lbl">Realized P&amp;L</span>
+                      <span class="metric-val font-mono">₹0.00</span>
+                    </div>
+                    <div class="metric-card">
+                      <span class="metric-lbl">Product</span>
+                      <span class="metric-val">{pos().prod}</span>
+                    </div>
+                  </div>
+
+                  {/* Mini Chart */}
+                  <div class="detail-chart-wrapper">
+                    <div class="detail-svg-chart-container" style={{ height: "90px" }}>
+                      <svg width="220" height="90" viewBox="0 0 220 90" preserveAspectRatio="none" class="detail-sparkline-svg">
+                        <defs>
+                          <linearGradient id="posAreaGrad" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0%" stop-color={up() ? "rgba(16, 185, 129, 0.15)" : "rgba(244, 63, 94, 0.15)"} />
+                            <stop offset="100%" stop-color={up() ? "rgba(16, 185, 129, 0.0)" : "rgba(244, 63, 94, 0.0)"} />
+                          </linearGradient>
+                        </defs>
+                        
+                        <line x1="0" y1="22" x2="220" y2="22" stroke="var(--theme-border-light)" stroke-width="0.7" stroke-dasharray="3,3" />
+                        <line x1="0" y1="45" x2="220" y2="45" stroke="var(--theme-border-light)" stroke-width="0.7" stroke-dasharray="3,3" />
+                        <line x1="0" y1="67" x2="220" y2="67" stroke="var(--theme-border-light)" stroke-width="0.7" stroke-dasharray="3,3" />
+
+                        <path d={`${getSelectedChartPath(pos().inst)} L 220,90 L 0,90 Z`} fill="url(#posAreaGrad)" />
+                        <path d={getSelectedChartPath(pos().inst)} fill="none" stroke={up() ? "var(--theme-color-up)" : "var(--theme-color-down)"} stroke-width="1.8" />
+                      </svg>
+                    </div>
+                  </div>
+
+                  {/* Greek Risk Stats specific to position */}
+                  <div class="greeks-box" style={{ background: 'var(--theme-bg-surface-elevated)', border: '1px solid var(--theme-border-light)', 'border-radius': '8px', padding: '10px' }}>
+                    <span style={{ 'font-size': '11px', 'font-weight': '700', 'margin-bottom': '6px', display: 'block' }}>Risk &amp; Greeks</span>
+                    <div style={{ display: 'grid', 'grid-template-columns': '1fr 1fr', gap: '8px', 'font-size': '10px' }}>
+                      <div style={{ display: 'flex', 'justify-content': 'space-between' }}><span style={{ color: 'var(--theme-text-muted)' }}>Delta</span><span class="font-mono font-semibold">+0.18</span></div>
+                      <div style={{ display: 'flex', 'justify-content': 'space-between' }}><span style={{ color: 'var(--theme-text-muted)' }}>Gamma</span><span class="font-mono font-semibold">+0.02</span></div>
+                      <div style={{ display: 'flex', 'justify-content': 'space-between' }}><span style={{ color: 'var(--theme-text-muted)' }}>Theta</span><span class="font-mono font-semibold">-450.20</span></div>
+                      <div style={{ display: 'flex', 'justify-content': 'space-between' }}><span style={{ color: 'var(--theme-text-muted)' }}>Vega</span><span class="font-mono font-semibold">+680.50</span></div>
+                    </div>
+                  </div>
+
+                  {/* Actions buttons */}
+                  <div class="detail-order-actions">
+                    <button class="order-btn buy" onClick={() => openAddPosition(pos().inst, 'Buy')}>Add Qty</button>
+                    <button class="order-btn sell" onClick={() => handleSquareOff(pos())}>Square Off</button>
+                  </div>
+
+                  <div class="actions-pos-list" style={{ 'margin-top': '4px' }}>
+                    <button class="pos-act-btn hedge" onClick={() => openAddPosition(pos().inst, 'Buy')}>
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="margin-right: 6px; display: inline-block; vertical-align: middle;">
+                        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                      </svg>
+                      Add Hedge
+                    </button>
+                    <button class="pos-act-btn convert">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="margin-right: 6px; display: inline-block; vertical-align: middle;">
+                        <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>
+                      </svg>
+                      P&amp;L Analysis
+                    </button>
+                  </div>
+                </div>
+              );
+            }}
+          </Show>
         </div>
       </div>
     </div>

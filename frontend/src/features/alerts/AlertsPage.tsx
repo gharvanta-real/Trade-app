@@ -1,4 +1,4 @@
-import { createSignal, For, Show, onMount } from 'solid-js';
+import { createEffect, createSignal, For, Show, onCleanup, onMount } from 'solid-js';
 import type { Component } from 'solid-js';
 import { store, createPriceAlert, deletePriceAlert, toggleAlertStatus, addNotification } from '../../store/tradingStore';
 import './alerts.css';
@@ -9,6 +9,9 @@ export const AlertsPage: Component = () => {
   const [searchQuery, setSearchQuery] = createSignal('');
   const [currentPage, setCurrentPage] = createSignal(1);
   const itemsPerPage = 8;
+  const [showFilters, setShowFilters] = createSignal(false);
+  const [typeFilter, setTypeFilter] = createSignal<'all' | 'price' | 'strategy' | 'volume'>('all');
+  const [exchangeFilter, setExchangeFilter] = createSignal<'all' | 'NSE' | 'NFO'>('all');
 
   // Active dropdown state for actions menu
   const [openDropdownId, setOpenDropdownId] = createSignal<string | null>(null);
@@ -29,7 +32,7 @@ export const AlertsPage: Component = () => {
   const [valueInput, setValueInput] = createSignal('22,850.00');
   const [triggerOnlyOnce, setTriggerOnlyOnce] = createSignal(true);
   const [setExpiry, setSetExpiry] = createSignal(false);
-  const [expiryValue] = createSignal('24 May 2024 03:30 PM');
+  const [expiryValue, setExpiryValue] = createSignal('2026-06-11T15:30');
   
   const [notifInApp, setNotifInApp] = createSignal(true);
   const [notifEmail, setNotifEmail] = createSignal(true);
@@ -47,7 +50,7 @@ export const AlertsPage: Component = () => {
       cond: 'Last Price Below',
       val: '48,200.00',
       status: 'active',
-      triggeredAt: '—',
+      triggeredAt: '-',
       enabled: true
     },
     {
@@ -57,9 +60,9 @@ export const AlertsPage: Component = () => {
       inst: 'NIFTY 50',
       exchange: 'NSE',
       cond: 'SMA (20) Crosses Above SMA (50)',
-      val: '—',
+      val: '-',
       status: 'active',
-      triggeredAt: '—',
+      triggeredAt: '-',
       enabled: true
     },
     {
@@ -71,7 +74,7 @@ export const AlertsPage: Component = () => {
       cond: 'Volume Above',
       val: '20,00,000',
       status: 'active',
-      triggeredAt: '—',
+      triggeredAt: '-',
       enabled: true
     },
     {
@@ -105,9 +108,9 @@ export const AlertsPage: Component = () => {
       inst: 'NIFTY 50',
       exchange: 'NSE',
       cond: 'Opening Range Break (15m)',
-      val: '—',
+      val: '-',
       status: 'paused',
-      triggeredAt: '—',
+      triggeredAt: '-',
       enabled: false
     },
     {
@@ -135,7 +138,7 @@ export const AlertsPage: Component = () => {
       cond: alert.cond === 'Price Above' ? 'Last Price Above' : 'Last Price Below',
       val: alert.val.toLocaleString('en-IN', { minimumFractionDigits: 2 }),
       status: alert.status,
-      triggeredAt: alert.status === 'triggered' ? 'Today, 10:15 AM' : '—',
+      triggeredAt: alert.status === 'triggered' ? 'Today, 10:15 AM' : '-',
       enabled: alert.status === 'active'
     }));
 
@@ -149,7 +152,7 @@ export const AlertsPage: Component = () => {
       setShowInstrumentDropdown(false);
     };
     window.addEventListener('click', closeAll);
-    return () => window.removeEventListener('click', closeAll);
+    onCleanup(() => window.removeEventListener('click', closeAll));
   });
 
   // Filter lists based on active subtab & search queries
@@ -161,6 +164,14 @@ export const AlertsPage: Component = () => {
     const tab = activeSubTab();
     if (tab !== 'all') {
       list = list.filter(a => a.status === tab);
+    }
+
+    if (typeFilter() !== 'all') {
+      list = list.filter(a => a.type === typeFilter());
+    }
+
+    if (exchangeFilter() !== 'all') {
+      list = list.filter(a => a.exchange === exchangeFilter());
     }
 
     // 2. Search query filter
@@ -183,6 +194,10 @@ export const AlertsPage: Component = () => {
   };
 
   const totalPages = () => Math.max(1, Math.ceil(filteredAlerts().length / itemsPerPage));
+
+  createEffect(() => {
+    if (currentPage() > totalPages()) setCurrentPage(totalPages());
+  });
 
   // Count metrics for subtab badges
   const countAll = () => allAlerts().length;
@@ -233,6 +248,17 @@ export const AlertsPage: Component = () => {
     const type = selectedType();
     const inst = selectedSymbol();
     const exchange = inst.includes('CE') || inst.includes('PE') ? 'NFO' : 'NSE';
+    const cleanVal = Number(valueInput().replace(/,/g, ''));
+
+    if (!notifInApp() && !notifEmail() && !notifSMS() && !notifWebhook()) {
+      addNotification('Alert Error', 'Select at least one notification channel.', 'warning', 'alerts');
+      return;
+    }
+
+    if (type !== 'strategy' && (!Number.isFinite(cleanVal) || cleanVal <= 0)) {
+      addNotification('Alert Error', 'Enter a valid alert value greater than zero.', 'error', 'alerts');
+      return;
+    }
 
     let alertName = '';
     let conditionText = '';
@@ -243,8 +269,7 @@ export const AlertsPage: Component = () => {
 
       // Push real price alert to store
       const storeCond = condOperator() === 'Above' ? 'Price Above' : 'Price Below';
-      const cleanVal = Number(valueInput().replace(/,/g, ''));
-      createPriceAlert(inst, storeCond, isNaN(cleanVal) ? 100 : cleanVal);
+      createPriceAlert(inst, storeCond, cleanVal);
     } else {
       if (type === 'strategy') {
         alertName = `${inst} Strategy Alert`;
@@ -262,9 +287,9 @@ export const AlertsPage: Component = () => {
         inst,
         exchange,
         cond: conditionText,
-        val: type === 'volume' ? valueInput() : '—',
+        val: type === 'volume' ? valueInput() : '-',
         status: 'active',
-        triggeredAt: '—',
+        triggeredAt: '-',
         enabled: true
       };
 
@@ -288,7 +313,7 @@ export const AlertsPage: Component = () => {
     } else if (type === 'volume') {
       setValueInput('20,00,000');
     } else {
-      setValueInput('—');
+      setValueInput('-');
     }
   };
 
@@ -299,6 +324,15 @@ export const AlertsPage: Component = () => {
     if (selectedType() === 'price') {
       setValueInput(symbolPrice.toLocaleString('en-IN', { minimumFractionDigits: 2 }));
     }
+  };
+
+  const clearFilters = () => {
+    setSearchQuery('');
+    setTypeFilter('all');
+    setExchangeFilter('all');
+    setActiveSubTab('all');
+    setCurrentPage(1);
+    setShowFilters(false);
   };
 
   return (
@@ -361,12 +395,34 @@ export const AlertsPage: Component = () => {
                 onInput={(e) => { setSearchQuery(e.currentTarget.value); setCurrentPage(1); }}
               />
             </div>
-            <button class="alerts-filter-btn">
+            <button class={`alerts-filter-btn ${showFilters() ? 'active' : ''}`} onClick={(e) => { e.stopPropagation(); setShowFilters(prev => !prev); }}>
               <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
                 <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/>
               </svg>
               Filters
             </button>
+            <Show when={showFilters()}>
+              <div class="alerts-filter-panel" onClick={(e) => e.stopPropagation()}>
+                <label>
+                  Type
+                  <select value={typeFilter()} onChange={(e) => { setTypeFilter(e.currentTarget.value as 'all' | 'price' | 'strategy' | 'volume'); setCurrentPage(1); }}>
+                    <option value="all">All types</option>
+                    <option value="price">Price</option>
+                    <option value="strategy">Strategy</option>
+                    <option value="volume">Volume</option>
+                  </select>
+                </label>
+                <label>
+                  Exchange
+                  <select value={exchangeFilter()} onChange={(e) => { setExchangeFilter(e.currentTarget.value as 'all' | 'NSE' | 'NFO'); setCurrentPage(1); }}>
+                    <option value="all">All exchanges</option>
+                    <option value="NSE">NSE</option>
+                    <option value="NFO">NFO</option>
+                  </select>
+                </label>
+                <button type="button" onClick={clearFilters}>Clear filters</button>
+              </div>
+            </Show>
           </div>
         </div>
 
@@ -491,7 +547,7 @@ export const AlertsPage: Component = () => {
         {/* Footer Page Bar */}
         <div class="alerts-footer-bar">
           <span>
-            Showing {(currentPage() - 1) * itemsPerPage + 1} to {Math.min(currentPage() * itemsPerPage, filteredAlerts().length)} of {filteredAlerts().length} alerts
+            Showing {filteredAlerts().length === 0 ? 0 : (currentPage() - 1) * itemsPerPage + 1} to {Math.min(currentPage() * itemsPerPage, filteredAlerts().length)} of {filteredAlerts().length} alerts
           </span>
           <div class="alerts-pagination-controls">
             <button 
@@ -684,13 +740,7 @@ export const AlertsPage: Component = () => {
 
             <Show when={setExpiry()}>
               <div class="panel-date-picker">
-                <span>{expiryValue()}</span>
-                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-                  <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
-                  <line x1="16" y1="2" x2="16" y2="6" />
-                  <line x1="8" y1="2" x2="8" y2="6" />
-                  <line x1="3" y1="10" x2="21" y2="10" />
-                </svg>
+                <input type="datetime-local" value={expiryValue()} onInput={(e) => setExpiryValue(e.currentTarget.value)} />
               </div>
             </Show>
           </div>
